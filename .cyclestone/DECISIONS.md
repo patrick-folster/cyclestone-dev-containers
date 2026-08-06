@@ -981,3 +981,10 @@ ones but do not rewrite them.
 - **Consequences:** The DCO check workflow runs successfully on `workflow_dispatch` events without throwing git range errors.
 - **Supersession:** None.
 
+## 2026-08-06 — D-046 Correct docker/login-action commit hash in release workflow
+
+- **Context:** The `Publish Release Image` workflow fails during execution with a GitHub Actions runner error: `Error: Unable to resolve action docker/login-action@49ed152c8eca002446f25032049e7514a60155b4, unable to find version 49ed152c8eca002446f25032049e7514a60155b4`. The hash `49ed152c8eca002446f25032049e7514a60155b4` is invalid for `docker/login-action`.
+- **Outcome:** Replaced the invalid commit hash with the correct commit SHA `9780b0c442fbb1117ed29e0efdff1e18412f7567` for `docker/login-action@v3.3.0`.
+- **Rationale:** Using the verified, immutable commit hash for `v3.3.0` ensures the action resolves correctly while maintaining the repository's security posture of pinning GitHub Actions to exact commit SHAs.
+- **Consequences:** The `Publish Release Image` workflow can successfully download and run the log in action.
+- **Supersession:** None.
