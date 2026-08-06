@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cyclestone.dev/schemas/project-providers-v1.schema.json",
+  "title": "Cyclestone project provider requests v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "providers"],
+  "properties": {
+    "version": { "const": 1 },
+    "providers": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]{1,62}[a-z0-9]$" },
+      "additionalProperties": { "$ref": "#/$defs/providerRequest" }
+    }
+  },
+  "$defs": {
+    "providerRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "mode"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "mode": { "enum": ["read-only", "read-write", "environment", "host-service", "disabled"] }
+      },
+      "oneOf": [
+        { "properties": { "enabled": { "const": false }, "mode": { "const": "disabled" } } },
+        { "properties": { "enabled": { "const": true }, "mode": { "enum": ["read-only", "read-write", "environment", "host-service"] } } }
+      ]
+    }
+  }
+}

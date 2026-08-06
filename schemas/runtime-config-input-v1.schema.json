@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cyclestone.dev/schemas/runtime-config-input-v1.schema.json",
+  "title": "Cyclestone runtime configuration input v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "project_request"],
+  "properties": {
+    "version": { "const": 1 },
+    "project_request": { "$ref": "project-providers-v1.schema.json" }
+  }
+}

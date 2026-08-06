@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Append a Signed-off-by trailer to commit messages if one is missing.
+# Enables repo-local DCO compliance without requiring `git commit -s` each time.
+set -euo pipefail
+
+msg_file="$1"
+name="${GIT_COMMITTER_NAME:-$(git config user.name)}"
+email="${GIT_COMMITTER_EMAIL:-$(git config user.email)}"
+
+if [ -z "${name:-}" ] || [ -z "${email:-}" ]; then
+  echo "commit-msg: cannot sign off - user.name/user.email not set" >&2
+  exit 1
+fi
+
+if git interpret-trailers --parse "$msg_file" | grep -qi '^Signed-off-by:'; then
+  exit 0
+fi
+
+git interpret-trailers --trailer "Signed-off-by: ${name} <${email}>" --in-place "$msg_file"

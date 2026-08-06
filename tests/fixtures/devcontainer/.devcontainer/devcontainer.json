@@ -1,0 +1,15 @@
+{
+  "name": "Cyclestone base validation",
+  "image": "${localEnv:CYCLESTONE_VALIDATION_IMAGE}",
+  "remoteUser": "developer",
+  "containerUser": "developer",
+  "updateRemoteUserUID": true,
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "overrideCommand": true,
+  "privileged": false,
+  "mounts": [
+    "source=${localEnv:CYCLESTONE_HOME_VOLUME},target=/home/developer,type=volume"
+  ],
+  "runArgs": []
+}

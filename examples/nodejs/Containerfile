@@ -1,0 +1,43 @@
+# syntax=docker/dockerfile:1.7
+#
+# Node.js/TypeScript child-image example.
+#
+# Installs a checksum-pinned Node.js SDK for both base architectures, restores
+# the inherited non-root contract, and deliberately contains no COPY or ADD
+# instruction.  Project source is bind-mounted at /workspace at runtime.
+# See docs/child-images.md before adapting it.
+
+ARG BASE_IMAGE_REF
+FROM ${BASE_IMAGE_REF}
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG NODE_VERSION
+ARG NODE_BASE_URL
+ARG NODE_AMD64_ARCHIVE
+ARG NODE_AMD64_SHA256
+ARG NODE_ARM64_ARCHIVE
+ARG NODE_ARM64_SHA256
+
+USER root
+RUN set -eu; \
+    case "$TARGETOS/$TARGETARCH" in \
+      linux/amd64) archive=$NODE_AMD64_ARCHIVE; expected=$NODE_AMD64_SHA256; dir=node-v"$NODE_VERSION"-linux-x64 ;; \
+      linux/arm64) archive=$NODE_ARM64_ARCHIVE; expected=$NODE_ARM64_SHA256; dir=node-v"$NODE_VERSION"-linux-arm64 ;; \
+      *) echo "unsupported Node.js SDK platform: $TARGETOS/$TARGETARCH" >&2; exit 64 ;; \
+    esac; \
+    curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+      "$NODE_BASE_URL/$archive" --output /tmp/node-sdk.tar.xz; \
+    printf '%s  %s\n' "$expected" /tmp/node-sdk.tar.xz | sha256sum --check --strict -; \
+    rm -rf /usr/local/node; \
+    tar -C /usr/local --xz -xf /tmp/node-sdk.tar.xz; \
+    mv "/usr/local/$dir" /usr/local/node; \
+    rm -f /tmp/node-sdk.tar.xz; \
+    test "$(/usr/local/node/bin/node --version)" = "v$NODE_VERSION"
+
+ENV PATH=/usr/local/node/bin:$PATH \
+    NODE_VERSION=${NODE_VERSION}
+USER developer
+WORKDIR /workspace
+ENTRYPOINT ["/usr/local/bin/cyclestone-entrypoint"]
+CMD ["/bin/bash", "-l"]

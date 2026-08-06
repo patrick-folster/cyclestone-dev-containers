@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "providers": {
+    "agy": { "enabled": true, "mode": "environment" },
+    "claude": { "enabled": true, "mode": "environment" },
+    "codex": { "enabled": true, "mode": "read-write" },
+    "generic-environment": { "enabled": true, "mode": "environment" },
+    "ollama": { "enabled": true, "mode": "host-service" },
+    "opencode": { "enabled": true, "mode": "read-write" }
+  }
+}

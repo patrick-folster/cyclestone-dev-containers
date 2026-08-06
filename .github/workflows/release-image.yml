@@ -1,0 +1,174 @@
+name: Release Image Publication
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+concurrency:
+  group: release-image-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish Release Image
+    if: github.repository == 'patrick-folster/cyclestone-dev-containers'
+    runs-on: ubuntu-24.04
+    environment: release
+    timeout-minutes: 120
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Load versions and environment
+        shell: bash
+        run: |
+          while IFS= read -r line || [ -n "$line" ]; do
+            if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "${line//[[:space:]]/}" ]]; then
+              continue
+            fi
+            echo "$line" >> "$GITHUB_ENV"
+          done < images/base/versions.env
+
+      - name: Parse SemVer and determine tags
+        id: parse_version
+        shell: bash
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          version="${tag#v}"
+          
+          if ! printf '%s\n' "$version" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'; then
+            echo "Error: version $version is not a valid Semantic Version" >&2
+            exit 1
+          fi
+          
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          
+          IFS='.' read -r major minor patch_rest <<EOF
+          $version
+          EOF
+          
+          is_prerelease="false"
+          if [ "${{ github.event.release.prerelease }}" = "true" ] || echo "$version" | grep -q "-"; then
+            is_prerelease="true"
+          fi
+          
+          if [ "$is_prerelease" = "true" ]; then
+            echo "tags=ghcr.io/patrick-folster/cyclestone-dev-container-base:$version" >> "$GITHUB_OUTPUT"
+          else
+            patch=$(echo "$patch_rest" | cut -d'-' -f1 | cut -d'+' -f1)
+            echo "tags=ghcr.io/patrick-folster/cyclestone-dev-container-base:$version,ghcr.io/patrick-folster/cyclestone-dev-container-base:$major.$minor,ghcr.io/patrick-folster/cyclestone-dev-container-base:$major,ghcr.io/patrick-folster/cyclestone-dev-container-base:latest" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure deterministic metadata
+        id: metadata
+        shell: bash
+        run: |
+          created=$(date -u -d "$(git show -s --format=%cI HEAD)" +%Y-%m-%dT%H:%M:%SZ)
+          echo "created=$created" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@49a12c4cc89e6dd0858487b98bed3df9fa825615 # v3.0.0
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb # v3.3.0
+
+      - name: Log in to GHCR
+        uses: docker/login-action@49ed152c8eca002446f25032049e7514a60155b4 # v3.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build local image for vulnerability scanning
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
+        with:
+          context: .
+          file: images/base/Containerfile
+          platforms: linux/amd64
+          load: true
+          tags: cyclestone-base:local-scan
+          build-args: |
+            BASE_IMAGE=${{ env.BASE_IMAGE }}
+            BASE_DIGEST=${{ env.BASE_DIGEST }}
+            CYCLESTONE_VERSION=${{ env.CYCLESTONE_VERSION }}
+            CYCLESTONE_BASE_URL=${{ env.CYCLESTONE_BASE_URL }}
+            CYCLESTONE_CHECKSUM_FILE=${{ env.CYCLESTONE_CHECKSUM_FILE }}
+            CYCLESTONE_CHECKSUM_SHA256=${{ env.CYCLESTONE_CHECKSUM_SHA256 }}
+            CYCLESTONE_AMD64_ARCHIVE=${{ env.CYCLESTONE_AMD64_ARCHIVE }}
+            CYCLESTONE_AMD64_SHA256=${{ env.CYCLESTONE_AMD64_SHA256 }}
+            CYCLESTONE_ARM64_ARCHIVE=${{ env.CYCLESTONE_ARM64_ARCHIVE }}
+            CYCLESTONE_ARM64_SHA256=${{ env.CYCLESTONE_ARM64_SHA256 }}
+            DEVELOPER_UID=1000
+            DEVELOPER_GID=1000
+            IMAGE_TITLE=Cyclestone Development Base
+            IMAGE_DESCRIPTION=Provider-free non-root Cyclestone development base image
+            IMAGE_SOURCE=https://github.com/patrick-folster/cyclestone-dev-containers
+            IMAGE_URL=https://github.com/patrick-folster/cyclestone-dev-containers/pkgs/container/cyclestone-dev-container-base
+            IMAGE_DOCUMENTATION=https://github.com/patrick-folster/cyclestone-dev-containers/blob/${{ github.sha }}/docs/base-image.md
+            IMAGE_LICENSES=LicenseRef-Container-Image-Review-Required
+            IMAGE_VERSION=${{ steps.parse_version.outputs.version }}
+            IMAGE_REVISION=${{ github.sha }}
+            IMAGE_CREATED=${{ steps.metadata.outputs.created }}
+            BASE_DIGEST=${{ env.BASE_DIGEST }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          image-ref: 'cyclestone-base:local-scan'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+        env:
+          TRIVY_DB_REPOSITORY: "public.ecr.aws/aquasecurity/trivy-db:2"
+
+      - name: Build and push multi-architecture OCI images
+        id: build-push
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
+        with:
+          context: .
+          file: images/base/Containerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.parse_version.outputs.tags }}
+          build-args: |
+            BASE_IMAGE=${{ env.BASE_IMAGE }}
+            BASE_DIGEST=${{ env.BASE_DIGEST }}
+            CYCLESTONE_VERSION=${{ env.CYCLESTONE_VERSION }}
+            CYCLESTONE_BASE_URL=${{ env.CYCLESTONE_BASE_URL }}
+            CYCLESTONE_CHECKSUM_FILE=${{ env.CYCLESTONE_CHECKSUM_FILE }}
+            CYCLESTONE_CHECKSUM_SHA256=${{ env.CYCLESTONE_CHECKSUM_SHA256 }}
+            CYCLESTONE_AMD64_ARCHIVE=${{ env.CYCLESTONE_AMD64_ARCHIVE }}
+            CYCLESTONE_AMD64_SHA256=${{ env.CYCLESTONE_AMD64_SHA256 }}
+            CYCLESTONE_ARM64_ARCHIVE=${{ env.CYCLESTONE_ARM64_ARCHIVE }}
+            CYCLESTONE_ARM64_SHA256=${{ env.CYCLESTONE_ARM64_SHA256 }}
+            DEVELOPER_UID=1000
+            DEVELOPER_GID=1000
+            IMAGE_TITLE=Cyclestone Development Base
+            IMAGE_DESCRIPTION=Provider-free non-root Cyclestone development base image
+            IMAGE_SOURCE=https://github.com/patrick-folster/cyclestone-dev-containers
+            IMAGE_URL=https://github.com/patrick-folster/cyclestone-dev-containers/pkgs/container/cyclestone-dev-container-base
+            IMAGE_DOCUMENTATION=https://github.com/patrick-folster/cyclestone-dev-containers/blob/${{ github.sha }}/docs/base-image.md
+            IMAGE_LICENSES=LicenseRef-Container-Image-Review-Required
+            IMAGE_VERSION=${{ steps.parse_version.outputs.version }}
+            IMAGE_REVISION=${{ github.sha }}
+            IMAGE_CREATED=${{ steps.metadata.outputs.created }}
+            BASE_DIGEST=${{ env.BASE_DIGEST }}
+          sbom: true
+          provenance: mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Generate build provenance attestation
+        uses: actions/attest-build-provenance@1c608d11d69870c2092266b3f9a6f3abbf17002c # v1.4.3
+        with:
+          subject-name: ghcr.io/patrick-folster/cyclestone-dev-container-base
+          subject-digest: ${{ steps.build-push.outputs.digest }}
+          push-to-registry: true

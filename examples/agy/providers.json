@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "providers": {
+    "agy": { "enabled": true, "mode": "environment" }
+  }
+}

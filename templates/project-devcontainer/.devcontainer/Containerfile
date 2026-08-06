@@ -1,0 +1,35 @@
+# syntax=docker/dockerfile:1.7
+
+ARG BASE_IMAGE_REF
+FROM ${BASE_IMAGE_REF}
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG GO_VERSION
+ARG GO_BASE_URL
+ARG GO_AMD64_ARCHIVE
+ARG GO_AMD64_SHA256
+ARG GO_ARM64_ARCHIVE
+ARG GO_ARM64_SHA256
+
+USER root
+RUN set -eu; \
+    case "$TARGETOS/$TARGETARCH" in \
+      linux/amd64) archive=$GO_AMD64_ARCHIVE; expected=$GO_AMD64_SHA256 ;; \
+      linux/arm64) archive=$GO_ARM64_ARCHIVE; expected=$GO_ARM64_SHA256 ;; \
+      *) echo "unsupported Go SDK platform: $TARGETOS/$TARGETARCH" >&2; exit 64 ;; \
+    esac; \
+    curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+      "$GO_BASE_URL/$archive" --output /tmp/go-sdk.tar.gz; \
+    printf '%s  %s\n' "$expected" /tmp/go-sdk.tar.gz | sha256sum --check --strict -; \
+    rm -rf /usr/local/go; \
+    tar -C /usr/local -xzf /tmp/go-sdk.tar.gz; \
+    rm -f /tmp/go-sdk.tar.gz; \
+    test "$(/usr/local/go/bin/go version | awk '{print $3}')" = "go$GO_VERSION"
+
+ENV PATH=/usr/local/go/bin:$PATH \
+    GO_VERSION=${GO_VERSION}
+USER developer
+WORKDIR /workspace
+ENTRYPOINT ["/usr/local/bin/cyclestone-entrypoint"]
+CMD ["/bin/bash", "-l"]

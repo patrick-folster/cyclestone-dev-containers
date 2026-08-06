@@ -1,0 +1,23 @@
+Cyclestone provider authorization review
+WARNING: Writable provider path requested for provider codex at /home/developer/.codex/auth.json. Isolated credential store will be used; direct writable host mounts are prohibited.
+Provider: Codex CLI [codex]
+Description: Exact file-backed Codex authentication without configuration, logs, or sessions.
+Platform: linux
+Access mode: read-write
+Source: ${HOME}/.codex/auth.json
+Destination: /home/developer/.codex/auth.json
+Filesystem access: read-write
+Forwarded variable names: none
+Host service: none; transport=none; authentication=none
+Credential strategy: isolated-store
+Import: atomic project-scoped import of the one reviewed regular file
+Synchronization: explicit provider-specific atomic replacement of the source file
+Refresh: refresh in the isolated file, then explicitly synchronize
+Revocation: refuse while a tracked session is active, then delete isolated state and revoke approval
+Backup: exclude the isolated store from backups; restored copies require revocation and provider-side rotation
+Security guidance: File-backed auth.json is required; keyring-only authentication fails closed. Read-write access applies only to a project-scoped isolated copy.
+Project identity: git-worktree <PROJECT> device=<DEVICE> inode=<INODE>
+Git directory: <GIT_DIR> device=<DEVICE> inode=<INODE>
+Git common directory: <COMMON_DIR> device=<DEVICE> inode=<INODE>
+Git evidence: object-format=sha1 root-set-sha256=<SHA256>
+Grant duration: [o] allow once; [a] always for this exact project and request; [d] deny

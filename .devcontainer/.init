@@ -1,0 +1,17 @@
+# Dev Container initialization configuration.
+# This file is tracked in git. For local overrides, create '.init.local'
+# in the same directory. Both files are sourced by initialize.sh.
+
+# Controls whether to run the socat forwarder on the host to bridge
+# the host's 127.0.0.1 Ollama port to host.containers.internal.
+CYCLESTONE_OLLAMA_FORWARD=true
+
+# The port where the Ollama service is listening on the host (127.0.0.1).
+CYCLESTONE_OLLAMA_PORT=11434
+
+# The port where the forwarder will listen on the host (0.0.0.0).
+CYCLESTONE_OLLAMA_FORWARD_PORT=11435
+
+# Custom Ollama Host inside the container. If set, this overrides
+# the forwarder and port options above.
+# CYCLESTONE_OLLAMA_HOST=http://host.containers.internal:11435

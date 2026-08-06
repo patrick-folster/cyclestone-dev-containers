@@ -1,0 +1,4 @@
+ARG BASE_IMAGE_REF
+FROM ${BASE_IMAGE_REF}
+USER developer
+RUN rm -f /home/developer/.local/bin/cyclestone

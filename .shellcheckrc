@@ -1,0 +1,21 @@
+# ShellCheck configuration for the Cyclestone repository.
+#
+# The repository targets POSIX sh and deliberately uses several style
+# patterns that ShellCheck flags at info/warning severity. These are
+# intentional and reviewed; they are disabled here so the CI gate
+# (`git ls-files -z '*.sh' | xargs -0 shellcheck -x`) can enforce the
+# checks that catch real defects (error severity) without failing on
+# the documented POSIX idioms below.
+#
+# SC1007  `var= other=` on one line reads as empty assignment, not a space.
+# SC2012  `ls | head` in test fixture extraction (controlled filenames).
+# SC2013  `for x in $(cmd)` reading known fixture output.
+# SC2015  `A && B || fail` is the repository's validation-fail idiom.
+# SC2016  Single-quoted strings carrying literal `$` (search patterns, heredocs).
+# SC2034  Variables populated by dot-sourced libraries or dynamic eval.
+# SC2064  `trap "..."` expands variables at registration time by design.
+# SC2086  Unquoted `$value` in `export`/assignment is POSIX-safe.
+# SC2125  Brace/glob characters are literal in assignments.
+# SC2154  Variables supplied by callers to dot-sourced libraries.
+# SC3025  `/dev/tcp` reachability fallback inside a subshell.
+disable=SC1007,SC2012,SC2013,SC2015,SC2016,SC2034,SC2064,SC2086,SC2125,SC2154,SC3025

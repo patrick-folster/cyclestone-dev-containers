@@ -1,0 +1,5 @@
+default_git_branch_prefix: cyclestone/milestones/
+agent_instructions:
+    file: AGENTS.md
+    propose_updates: true
+    auto_apply_updates: false

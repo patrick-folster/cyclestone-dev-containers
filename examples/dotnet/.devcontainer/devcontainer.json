@@ -1,0 +1,30 @@
+{
+  "name": "Cyclestone .NET example",
+  "build": {
+    "dockerfile": "../Containerfile",
+    "context": "..",
+    "args": {
+      "BASE_IMAGE_REF": "${localEnv:CYCLESTONE_BASE_IMAGE_REF}",
+      "TARGETOS": "linux",
+      "TARGETARCH": "amd64",
+      "DOTNET_VERSION": "8.0.423",
+      "DOTNET_BASE_URL": "https://builds.dotnet.microsoft.com/dotnet/Sdk/8.0.423",
+      "DOTNET_AMD64_ARCHIVE": "dotnet-sdk-8.0.423-linux-x64.tar.gz",
+      "DOTNET_AMD64_SHA512": "e94513dfe42271a85f01e87bd4272aa80b4ec13556f4531754802542225667775242c5e281a94837dae6cc65f7bcc457d2f663f240c0e2b7573fd909e786b1a5",
+      "DOTNET_ARM64_ARCHIVE": "dotnet-sdk-8.0.423-linux-arm64.tar.gz",
+      "DOTNET_ARM64_SHA512": "8c6dd335a8fa63849af551fe6f10ca8e92db0b1aaa761727e3d997d7ebfebe68d9fdccdd241a1804f6812055770b00a40648f32e69f1606ecf864440902c67a1"
+    }
+  },
+  "remoteUser": "developer",
+  "containerUser": "developer",
+  "updateRemoteUserUID": false,
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "workspaceFolder": "/workspace",
+  "overrideCommand": true,
+  "privileged": false,
+  "runArgs": [
+    "--userns=keep-id:uid=1000,gid=1000",
+    "--security-opt=no-new-privileges"
+  ],
+  "customizations": {}
+}

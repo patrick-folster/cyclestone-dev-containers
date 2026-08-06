@@ -1,0 +1,76 @@
+[
+  {
+    "environmentNames": [
+      "GEMINI_API_KEY"
+    ],
+    "hostService": {
+      "kind": "none"
+    },
+    "mode": "environment",
+    "mountDestination": null,
+    "providerId": "agy",
+    "strategy": "runtime-environment"
+  },
+  {
+    "environmentNames": [
+      "ANTHROPIC_API_KEY"
+    ],
+    "hostService": {
+      "kind": "none"
+    },
+    "mode": "environment",
+    "mountDestination": null,
+    "providerId": "claude",
+    "strategy": "runtime-environment"
+  },
+  {
+    "environmentNames": [],
+    "hostService": {
+      "kind": "none"
+    },
+    "mode": "read-write",
+    "mountDestination": "/home/developer/.codex",
+    "providerId": "codex",
+    "strategy": "isolated-store"
+  },
+  {
+    "environmentNames": [
+      "HTTPS_PROXY",
+      "HTTP_PROXY",
+      "NO_PROXY"
+    ],
+    "hostService": {
+      "kind": "none"
+    },
+    "mode": "environment",
+    "mountDestination": null,
+    "providerId": "generic-environment",
+    "strategy": "runtime-environment"
+  },
+  {
+    "environmentNames": [
+      "OLLAMA_HOST"
+    ],
+    "hostService": {
+      "authentication": "none",
+      "default_endpoint": "http://host.containers.internal:11434",
+      "endpoint_environment": "OLLAMA_HOST",
+      "kind": "http",
+      "transport": "tcp"
+    },
+    "mode": "host-service",
+    "mountDestination": null,
+    "providerId": "ollama",
+    "strategy": "host-service"
+  },
+  {
+    "environmentNames": [],
+    "hostService": {
+      "kind": "none"
+    },
+    "mode": "read-write",
+    "mountDestination": "/home/developer/.local/share/opencode",
+    "providerId": "opencode",
+    "strategy": "isolated-store"
+  }
+]

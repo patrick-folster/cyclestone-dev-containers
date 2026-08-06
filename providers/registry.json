@@ -1,0 +1,284 @@
+{
+  "registry_version": 2,
+  "definitions": [
+    {
+      "id": "claude",
+      "display_name": "Claude Code",
+      "description": "Claude API access through one exact runtime environment variable.",
+      "supported_modes": [
+        "environment"
+      ],
+      "recommended_mode": "environment",
+      "platforms": [
+        "linux"
+      ],
+      "required_cli": {
+        "name": "claude",
+        "location": "container"
+      },
+      "adapters": [
+        {
+          "mode": "environment",
+          "adapter_version": 1,
+          "strategy": "runtime-environment",
+          "source_files": [],
+          "environment_names": [
+            "ANTHROPIC_API_KEY"
+          ],
+          "container_destination": null,
+          "access": "environment",
+          "import_behavior": "none",
+          "synchronization": "none",
+          "refresh_behavior": "replace the host variable and recreate the session",
+          "revocation_behavior": "stop the active session, revoke approval, and rotate the provider key",
+          "directory_mode": null,
+          "file_mode": null,
+          "backup_policy": "no Cyclestone credential copy; host and process retention remain external",
+          "failure_codes": [
+            "E_ENV_MISSING"
+          ]
+        }
+      ],
+      "security_guidance": "The API key is inherited by name only at runtime and is readable by every process running as the container user."
+    },
+    {
+      "id": "codex",
+      "display_name": "Codex CLI",
+      "description": "Exact file-backed Codex authentication without configuration, logs, or sessions.",
+      "supported_modes": [
+        "read-only",
+        "read-write"
+      ],
+      "recommended_mode": "read-write",
+      "platforms": [
+        "linux"
+      ],
+      "required_cli": {
+        "name": "codex",
+        "location": "container"
+      },
+      "adapters": [
+        {
+          "mode": "read-only",
+          "adapter_version": 1,
+          "strategy": "direct-file-mount",
+          "source_files": [
+            "${HOME}/.codex/auth.json"
+          ],
+          "environment_names": [],
+          "container_destination": "/home/developer/.codex/auth.json",
+          "access": "read-only",
+          "import_behavior": "none",
+          "synchronization": "forbidden",
+          "refresh_behavior": "host file changes require session recreation",
+          "revocation_behavior": "stop the active session, revoke approval, and rotate provider credentials when disclosure is suspected",
+          "directory_mode": null,
+          "file_mode": 600,
+          "backup_policy": "no Cyclestone copy; host backups may retain the source file",
+          "failure_codes": [
+            "E_CREDENTIAL_MISSING",
+            "E_CREDENTIAL_FORMAT",
+            "E_SYNC_FORBIDDEN"
+          ]
+        },
+        {
+          "mode": "read-write",
+          "adapter_version": 1,
+          "strategy": "isolated-store",
+          "source_files": [
+            "${HOME}/.codex/auth.json"
+          ],
+          "environment_names": [],
+          "container_destination": "/home/developer/.codex/auth.json",
+          "access": "read-write",
+          "import_behavior": "atomic project-scoped import of the one reviewed regular file",
+          "synchronization": "explicit provider-specific atomic replacement of the source file",
+          "refresh_behavior": "refresh in the isolated file, then explicitly synchronize",
+          "revocation_behavior": "refuse while a tracked session is active, then delete isolated state and revoke approval",
+          "directory_mode": 700,
+          "file_mode": 600,
+          "backup_policy": "exclude the isolated store from backups; restored copies require revocation and provider-side rotation",
+          "failure_codes": [
+            "E_CREDENTIAL_MISSING",
+            "E_CREDENTIAL_FORMAT",
+            "E_IMPORT_UNSAFE",
+            "E_SYNC_INVALID"
+          ]
+        }
+      ],
+      "security_guidance": "File-backed auth.json is required; keyring-only authentication fails closed. Read-write access applies only to a project-scoped isolated copy."
+    },
+    {
+      "id": "generic-environment",
+      "display_name": "Generic environment",
+      "description": "Three exact proxy variable names forwarded only at runtime.",
+      "supported_modes": [
+        "environment"
+      ],
+      "recommended_mode": "environment",
+      "platforms": [
+        "linux"
+      ],
+      "required_cli": {
+        "name": null,
+        "location": "none"
+      },
+      "adapters": [
+        {
+          "mode": "environment",
+          "adapter_version": 1,
+          "strategy": "runtime-environment",
+          "source_files": [],
+          "environment_names": [
+            "HTTPS_PROXY",
+            "HTTP_PROXY",
+            "NO_PROXY"
+          ],
+          "container_destination": null,
+          "access": "environment",
+          "import_behavior": "none",
+          "synchronization": "none",
+          "refresh_behavior": "replace host variables and recreate the session",
+          "revocation_behavior": "stop the active session and revoke approval",
+          "directory_mode": null,
+          "file_mode": null,
+          "backup_policy": "no Cyclestone credential copy; host and process retention remain external",
+          "failure_codes": [
+            "E_ENV_MISSING"
+          ]
+        }
+      ],
+      "security_guidance": "Proxy URLs can contain credentials; values are never serialized or printed."
+    },
+    {
+      "id": "ollama",
+      "display_name": "Ollama",
+      "description": "Unauthenticated access to one reviewed host-service endpoint selected by OLLAMA_HOST.",
+      "supported_modes": [
+        "host-service"
+      ],
+      "recommended_mode": "host-service",
+      "platforms": [
+        "linux"
+      ],
+      "required_cli": {
+        "name": "ollama",
+        "location": "container"
+      },
+      "adapters": [
+        {
+          "mode": "host-service",
+          "adapter_version": 1,
+          "strategy": "host-service",
+          "source_files": [],
+          "environment_names": [
+            "OLLAMA_HOST"
+          ],
+          "container_destination": null,
+          "access": "host-service",
+          "import_behavior": "none",
+          "synchronization": "none",
+          "refresh_behavior": "change the runtime endpoint and recreate the session",
+          "revocation_behavior": "stop the active session and revoke approval",
+          "directory_mode": null,
+          "file_mode": null,
+          "backup_policy": "no credential material is copied",
+          "failure_codes": [
+            "E_ENV_MISSING"
+          ]
+        }
+      ],
+      "host_service": {
+        "kind": "http",
+        "endpoint_environment": "OLLAMA_HOST",
+        "default_endpoint": "http://host.containers.internal:11434",
+        "transport": "tcp",
+        "authentication": "none"
+      },
+      "security_guidance": "Only the reviewed unauthenticated endpoint is supported; no engine socket or model directory is exposed."
+    },
+    {
+      "id": "opencode",
+      "display_name": "OpenCode",
+      "description": "Exact OpenCode authentication in a project-scoped isolated store.",
+      "supported_modes": [
+        "read-write"
+      ],
+      "recommended_mode": "read-write",
+      "platforms": [
+        "linux"
+      ],
+      "required_cli": {
+        "name": "opencode",
+        "location": "container"
+      },
+      "adapters": [
+        {
+          "mode": "read-write",
+          "adapter_version": 1,
+          "strategy": "isolated-store",
+          "source_files": [
+            "${HOME}/.local/share/opencode/auth.json"
+          ],
+          "environment_names": [],
+          "container_destination": "/home/developer/.local/share/opencode/auth.json",
+          "access": "read-write",
+          "import_behavior": "atomic project-scoped import of the one reviewed regular file",
+          "synchronization": "explicit provider-specific atomic replacement of the source file",
+          "refresh_behavior": "refresh in the isolated file, then explicitly synchronize",
+          "revocation_behavior": "refuse while a tracked session is active, then delete isolated state and revoke approval",
+          "directory_mode": 700,
+          "file_mode": 600,
+          "backup_policy": "exclude the isolated store from backups; restored copies require revocation and provider-side rotation",
+          "failure_codes": [
+            "E_CREDENTIAL_MISSING",
+            "E_CREDENTIAL_FORMAT",
+            "E_IMPORT_UNSAFE",
+            "E_SYNC_INVALID"
+          ]
+        }
+      ],
+      "security_guidance": "Only auth.json is accepted; configuration, sessions, logs, databases, caches, and adjacent files are excluded."
+    },
+    {
+      "id": "agy",
+      "display_name": "Google Antigravity CLI (agy)",
+      "description": "Google Antigravity CLI access through one exact runtime environment variable.",
+      "supported_modes": [
+        "environment"
+      ],
+      "recommended_mode": "environment",
+      "platforms": [
+        "linux"
+      ],
+      "required_cli": {
+        "name": "agy",
+        "location": "container"
+      },
+      "adapters": [
+        {
+          "mode": "environment",
+          "adapter_version": 1,
+          "strategy": "runtime-environment",
+          "source_files": [],
+          "environment_names": [
+            "GEMINI_API_KEY"
+          ],
+          "container_destination": null,
+          "access": "environment",
+          "import_behavior": "none",
+          "synchronization": "none",
+          "refresh_behavior": "replace the host variable and recreate the session",
+          "revocation_behavior": "stop the active session, revoke approval, and rotate the provider key",
+          "directory_mode": null,
+          "file_mode": null,
+          "backup_policy": "no Cyclestone credential copy; host and process retention remain external",
+          "failure_codes": [
+            "E_ENV_MISSING"
+          ]
+        }
+      ],
+      "security_guidance": "The API key is inherited by name only at runtime and is readable by every process running as the container user."
+    }
+  ]
+}

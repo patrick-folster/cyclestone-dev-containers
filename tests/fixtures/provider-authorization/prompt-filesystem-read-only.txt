@@ -1,0 +1,22 @@
+Cyclestone provider authorization review
+Provider: Codex CLI [codex]
+Description: Exact file-backed Codex authentication without configuration, logs, or sessions.
+Platform: linux
+Access mode: read-only
+Source: ${HOME}/.codex/auth.json
+Destination: /home/developer/.codex/auth.json
+Filesystem access: read-only
+Forwarded variable names: none
+Host service: none; transport=none; authentication=none
+Credential strategy: direct-file-mount
+Import: none
+Synchronization: forbidden
+Refresh: host file changes require session recreation
+Revocation: stop the active session, revoke approval, and rotate provider credentials when disclosure is suspected
+Backup: no Cyclestone copy; host backups may retain the source file
+Security guidance: File-backed auth.json is required; keyring-only authentication fails closed. Read-write access applies only to a project-scoped isolated copy.
+Project identity: git-worktree <PROJECT> device=<DEVICE> inode=<INODE>
+Git directory: <GIT_DIR> device=<DEVICE> inode=<INODE>
+Git common directory: <COMMON_DIR> device=<DEVICE> inode=<INODE>
+Git evidence: object-format=sha1 root-set-sha256=<SHA256>
+Grant duration: [o] allow once; [a] always for this exact project and request; [d] deny

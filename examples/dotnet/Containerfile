@@ -1,0 +1,48 @@
+# syntax=docker/dockerfile:1.7
+#
+# .NET child-image example.
+#
+# Installs a checksum-pinned .NET SDK for both base architectures, restores the
+# inherited non-root contract, and deliberately contains no COPY or ADD
+# instruction.  Project source is bind-mounted at /workspace at runtime.
+# The .NET publisher publishes SHA-512 checksums, so this example verifies with
+# sha512sum --check --strict.  See docs/child-images.md before adapting it.
+
+ARG BASE_IMAGE_REF
+FROM ${BASE_IMAGE_REF}
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG DOTNET_VERSION
+ARG DOTNET_BASE_URL
+ARG DOTNET_AMD64_ARCHIVE
+ARG DOTNET_AMD64_SHA512
+ARG DOTNET_ARM64_ARCHIVE
+ARG DOTNET_ARM64_SHA512
+
+USER root
+RUN set -eu; \
+    case "$TARGETOS/$TARGETARCH" in \
+      linux/amd64) archive=$DOTNET_AMD64_ARCHIVE; expected=$DOTNET_AMD64_SHA512 ;; \
+      linux/arm64) archive=$DOTNET_ARM64_ARCHIVE; expected=$DOTNET_ARM64_SHA512 ;; \
+      *) echo "unsupported .NET SDK platform: $TARGETOS/$TARGETARCH" >&2; exit 64 ;; \
+    esac; \
+    curl --proto '=https' --tlsv1.2 --fail --silent --show-error --location \
+      "$DOTNET_BASE_URL/$archive" --output /tmp/dotnet-sdk.tar.gz; \
+    printf '%s  %s\n' "$expected" /tmp/dotnet-sdk.tar.gz | sha512sum --check --strict -; \
+    rm -rf /usr/local/dotnet; \
+    mkdir -p /usr/local/dotnet; \
+    tar -C /usr/local/dotnet -xzf /tmp/dotnet-sdk.tar.gz; \
+    rm -f /tmp/dotnet-sdk.tar.gz; \
+    export DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1; \
+    test "$(/usr/local/dotnet/dotnet --version)" = "$DOTNET_VERSION"
+
+ENV PATH=/usr/local/dotnet:$PATH \
+    DOTNET_VERSION=${DOTNET_VERSION} \
+    DOTNET_CLI_TELEMETRY_OPTOUT=1 \
+    DOTNET_NOLOGO=1 \
+    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+USER developer
+WORKDIR /workspace
+ENTRYPOINT ["/usr/local/bin/cyclestone-entrypoint"]
+CMD ["/bin/bash", "-l"]

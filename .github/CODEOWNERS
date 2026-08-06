@@ -1,0 +1,16 @@
+# Repository owners. Entries use the GitHub CODEOWNERS syntax.
+# Global owner applied to every path; extend per-area as the project grows.
+# Area ownership mirrors docs/architecture/repository-layout.md.
+
+* @patrick-folster
+
+# Per-area owners (optional; uncomment to split review ownership).
+# /images/        @patrick-folster
+# /scripts/       @patrick-folster
+# /providers/     @patrick-folster
+# /templates/     @patrick-folster
+# /tests/         @patrick-folster
+# /examples/      @patrick-folster
+# /.github/       @patrick-folster
+# /schemas/       @patrick-folster
+# /docs/          @patrick-folster

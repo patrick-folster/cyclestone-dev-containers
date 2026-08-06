@@ -1,0 +1,1 @@
+{"version":1,"providers":{"custom":{"enabled":true,"mode":"environment","definition":{"environment_names":["INERT_SENTINEL"]}}}}

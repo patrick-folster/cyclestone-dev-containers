@@ -1,0 +1,30 @@
+{
+  "name": "Cyclestone Node.js example",
+  "build": {
+    "dockerfile": "../Containerfile",
+    "context": "..",
+    "args": {
+      "BASE_IMAGE_REF": "${localEnv:CYCLESTONE_BASE_IMAGE_REF}",
+      "TARGETOS": "linux",
+      "TARGETARCH": "amd64",
+      "NODE_VERSION": "22.11.0",
+      "NODE_BASE_URL": "https://nodejs.org/dist/v22.11.0",
+      "NODE_AMD64_ARCHIVE": "node-v22.11.0-linux-x64.tar.xz",
+      "NODE_AMD64_SHA256": "83bf07dd343002a26211cf1fcd46a9d9534219aad42ee02847816940bf610a72",
+      "NODE_ARM64_ARCHIVE": "node-v22.11.0-linux-arm64.tar.xz",
+      "NODE_ARM64_SHA256": "6031d04b98f59ff0f7cb98566f65b115ecd893d3b7870821171708cdbaf7ae6e"
+    }
+  },
+  "remoteUser": "developer",
+  "containerUser": "developer",
+  "updateRemoteUserUID": false,
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "workspaceFolder": "/workspace",
+  "overrideCommand": true,
+  "privileged": false,
+  "runArgs": [
+    "--userns=keep-id:uid=1000,gid=1000",
+    "--security-opt=no-new-privileges"
+  ],
+  "customizations": {}
+}

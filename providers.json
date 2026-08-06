@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "providers": {
+    "codex": { "enabled": true, "mode": "read-write" },
+    "ollama": { "enabled": true, "mode": "host-service" },
+    "agy": { "enabled": true, "mode": "environment" },
+    "opencode": { "enabled": true, "mode": "read-write" }
+  }
+}

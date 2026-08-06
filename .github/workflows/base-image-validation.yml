@@ -1,0 +1,440 @@
+name: Base image native validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_multiarch:
+        description: Build the combined OCI archive with Docker Build Cloud
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: base-image-validation-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_VERSION: 1.0.0-validation.${{ github.run_id }}
+  IMAGE_REVISION: ${{ github.sha }}
+  IMAGE_LICENSES: LicenseRef-Container-Image-Review-Required
+  DEVCONTAINER_VERSION: 0.86.0
+
+jobs:
+  static:
+    name: Static and fixture checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install dependencies for static and runtime checks
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y socat shellcheck
+          npm install --global "@devcontainers/cli@${{ env.DEVCONTAINER_VERSION }}"
+
+      - name: Run repository contracts
+        run: ./tests/contracts.sh
+
+      - name: Run ShellCheck
+        run: git ls-files -z '*.sh' | xargs -0 shellcheck -x
+
+      - name: Run provider registry validation
+        run: ./tests/provider-registry.sh
+
+      - name: Run provider authorization validation
+        run: ./tests/provider-authorization.sh
+
+      - name: Run child image static validation
+        run: ./tests/child-image-static.sh
+
+      - name: Run runtime configuration validation
+        run: ./tests/runtime-config.sh
+
+  # native:
+  #   name: ${{ matrix.id }} · ${{ matrix.runner }} · ${{ matrix.platform }}
+  #   needs: static
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       include:
+  #         - id: C1
+  #           runner: ubuntu-22.04
+  #           platform: linux/amd64
+  #           rootless: false
+  #         - id: C2
+  #           runner: ubuntu-24.04
+  #           platform: linux/amd64
+  #           rootless: true
+  #         - id: C3
+  #           runner: ubuntu-24.04-arm
+  #           platform: linux/arm64
+  #           rootless: false
+  #   runs-on: ${{ matrix.runner }}
+  #   timeout-minutes: 90
+  #   steps:
+  #     - name: Check out repository
+  #       uses: actions/checkout@v6
+
+  #     - name: Configure deterministic metadata
+  #       shell: bash
+  #       run: |
+  #         created=$(date -u -d "$(git show -s --format=%cI HEAD)" +%Y-%m-%dT%H:%M:%SZ)
+  #         echo "IMAGE_CREATED=$created" >> "$GITHUB_ENV"
+  #         mkdir -p "dist/evidence/${{ matrix.id }}"
+  #         printf 'runner=%s\nplatform=%s\ncommit=%s\n' \
+  #           '${{ matrix.runner }}' '${{ matrix.platform }}' '${{ github.sha }}' \
+  #           > "dist/evidence/${{ matrix.id }}/request.txt"
+
+  #     - name: Configure rootless Docker
+  #       if: matrix.rootless
+  #       shell: bash
+  #       run: |
+  #         set -euo pipefail
+  #         sudo apt-get update
+  #         sudo apt-get install -y acl ca-certificates curl uidmap dbus-user-session fuse-overlayfs slirp4netns
+  #         sudo install -m 0755 -d /etc/apt/keyrings
+  #         curl --fail --silent --show-error --location \
+  #           https://download.docker.com/linux/ubuntu/gpg \
+  #           --output "$RUNNER_TEMP/docker.asc"
+  #         sudo install -m 0644 "$RUNNER_TEMP/docker.asc" /etc/apt/keyrings/docker.asc
+  #         architecture=$(dpkg --print-architecture)
+  #         . /etc/os-release
+  #         printf '%s\n' \
+  #           "deb [arch=$architecture signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $VERSION_CODENAME stable" \
+  #           | sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
+  #         sudo apt-get update
+  #         sudo apt-get install -y docker-ce-rootless-extras
+  #         sudo systemctl disable --now docker.service docker.socket
+  #         runtime_dir="/run/user/$(id -u)"
+  #         sudo install -d -m 0700 -o "$(id -u)" -g "$(id -g)" "$runtime_dir"
+  #         sudo loginctl enable-linger "$(id -un)"
+  #         export XDG_RUNTIME_DIR="$runtime_dir"
+  #         dockerd-rootless-setuptool.sh install --force
+  #         docker context use rootless
+  #         rootless_host=$(docker context inspect rootless --format '{{.Endpoints.docker.Host}}')
+  #         echo "DOCKER_HOST=$rootless_host" >> "$GITHUB_ENV"
+  #         echo "XDG_RUNTIME_DIR=$runtime_dir" >> "$GITHUB_ENV"
+  #         export DOCKER_HOST="$rootless_host" XDG_RUNTIME_DIR="$runtime_dir"
+  #         docker info --format '{{json .SecurityOptions}}' | grep -q rootless
+
+  #     - name: Set up Buildx
+  #       uses: docker/setup-buildx-action@v3
+
+  #     - name: Install pinned Dev Container CLI
+  #       run: npm install --global "@devcontainers/cli@$DEVCONTAINER_VERSION"
+
+  #     - name: Run native validation
+  #       shell: bash
+  #       env:
+  #         VALIDATION_ID: ${{ matrix.id }}
+  #         VALIDATION_PLATFORM: ${{ matrix.platform }}
+  #         EVIDENCE_DIR: ${{ github.workspace }}/dist/evidence/${{ matrix.id }}
+  #       run: |
+  #         set -o pipefail
+  #         ./scripts/validate-base-native.sh 2>&1 \
+  #           | tee "dist/evidence/${{ matrix.id }}/validation.log"
+
+  #     - name: Add job summary
+  #       if: always()
+  #       shell: bash
+  #       run: |
+  #         {
+  #           echo "## ${{ matrix.id }} native validation"
+  #           echo
+  #           echo "- Runner: ${{ matrix.runner }}"
+  #           echo "- Platform: ${{ matrix.platform }}"
+  #           echo "- Rootless required: ${{ matrix.rootless }}"
+  #           echo "- Commit: ${{ github.sha }}"
+  #           echo "- Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+  #         } >> "$GITHUB_STEP_SUMMARY"
+
+  #     - name: Upload evidence
+  #       if: always()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: base-image-${{ matrix.id }}-evidence
+  #         path: dist/evidence/${{ matrix.id }}
+  #         if-no-files-found: error
+  #         retention-days: 30
+
+  workspace-identity:
+    name: Dev Container and rootless Podman identity
+    needs: static
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install identity-mode prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y acl crun podman uidmap
+          npm install --global "@devcontainers/cli@$DEVCONTAINER_VERSION"
+
+      - name: Create controlled non-1000 fixture identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture_user=cyclestone-fixture
+          fixture_uid=2001
+          fixture_gid=2002
+          shared_gid=2003
+          sudo groupadd --gid "$fixture_gid" "$fixture_user"
+          sudo groupadd --gid "$shared_gid" cyclestone-shared
+          sudo useradd --uid "$fixture_uid" --gid "$fixture_gid" \
+            --groups docker,cyclestone-shared --create-home --shell /bin/bash "$fixture_user"
+          for target in "$GITHUB_WORKSPACE" "$RUNNER_TEMP"; do
+            path=$target
+            while test "$path" != /; do
+              sudo setfacl -m "u:$fixture_user:--x" "$path"
+              path=$(dirname "$path")
+            done
+          done
+          sudo setfacl -m "u:$fixture_user:r-x" "$GITHUB_WORKSPACE" "$RUNNER_TEMP"
+          if ! grep -q "^$fixture_user:" /etc/subuid; then
+            sudo usermod --add-subuids 300000-365535 "$fixture_user"
+          fi
+          if ! grep -q "^$fixture_user:" /etc/subgid; then
+            sudo usermod --add-subgids 300000-365535 "$fixture_user"
+          fi
+          sudo install -d -m 0700 -o "$fixture_uid" -g "$fixture_gid" "/run/user/$fixture_uid"
+          sudo install -d -m 2770 -o root -g "$shared_gid" "$RUNNER_TEMP/cyclestone-group-access"
+          install -d -m 0755 "$GITHUB_WORKSPACE/dist/evidence/workspace-identity"
+          sudo install -d -m 0755 -o "$fixture_uid" -g "$fixture_gid" \
+            "$GITHUB_WORKSPACE/dist/evidence/workspace-identity/devcontainer" \
+            "$GITHUB_WORKSPACE/dist/evidence/workspace-identity/podman"
+          sudo -u "$fixture_user" test -x "$GITHUB_WORKSPACE/tests/devcontainer.sh"
+          sudo -u "$fixture_user" test -x "$GITHUB_WORKSPACE/tests/rootless-podman.sh"
+
+      - name: Build identity validation image
+        shell: bash
+        run: |
+          set -euo pipefail
+          export IMAGE_CREATED
+          IMAGE_CREATED=$(date -u -d "$(git show -s --format=%cI HEAD)" +%Y-%m-%dT%H:%M:%SZ)
+          IMAGE_TAG=cyclestone-base:workspace-identity ./scripts/build-base.sh load
+          docker save --output dist/cyclestone-workspace-identity.tar cyclestone-base:workspace-identity
+          setfacl -m u:cyclestone-fixture:r-- dist/cyclestone-workspace-identity.tar
+          sudo -u cyclestone-fixture test -r dist/cyclestone-workspace-identity.tar
+
+      - name: Validate Dev Container UID and GID mutation
+        shell: bash
+        run: |
+          sudo -u cyclestone-fixture env \
+            HOME=/home/cyclestone-fixture \
+            PATH="$PATH" \
+            CYCLESTONE_VALIDATION_IMAGE=cyclestone-base:workspace-identity \
+            EVIDENCE_DIR="$GITHUB_WORKSPACE/dist/evidence/workspace-identity/devcontainer" \
+            "$GITHUB_WORKSPACE/tests/devcontainer.sh"
+
+      - name: Validate rootless Podman keep-id
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -u cyclestone-fixture env \
+            HOME=/home/cyclestone-fixture \
+            XDG_RUNTIME_DIR=/run/user/2001 \
+            podman load --input "$GITHUB_WORKSPACE/dist/cyclestone-workspace-identity.tar"
+          sudo -u cyclestone-fixture env \
+            HOME=/home/cyclestone-fixture \
+            XDG_RUNTIME_DIR=/run/user/2001 \
+            IMAGE=cyclestone-base:workspace-identity \
+            IDENTITY_GROUP_PATH="$RUNNER_TEMP/cyclestone-group-access" \
+            IDENTITY_GROUP_GID=2003 \
+            EVIDENCE_DIR="$GITHUB_WORKSPACE/dist/evidence/workspace-identity/podman" \
+            "$GITHUB_WORKSPACE/tests/rootless-podman.sh"
+
+      - name: Upload workspace identity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workspace-identity-evidence
+          path: dist/evidence/workspace-identity
+          if-no-files-found: error
+          retention-days: 30
+
+  # project-devcontainer-podman:
+  #   name: Project Dev Container · Podman · ${{ matrix.identity_case }}
+  #   needs: static
+  #   strategy:
+  #     fail-fast: false
+  #     matrix:
+  #       include:
+  #         - identity_case: matching
+  #           fixture_uid: 1000
+  #           fixture_gid: 1000
+  #           subid_start: 400000
+  #         - identity_case: differing
+  #           fixture_uid: 2001
+  #           fixture_gid: 2002
+  #           subid_start: 500000
+  #   runs-on: ubuntu-24.04
+  #   timeout-minutes: 90
+  #   steps:
+  #     - name: Check out repository
+  #       uses: actions/checkout@v6
+
+  #     - name: Install pinned client and rootless Podman prerequisites
+  #       run: |
+  #         sudo apt-get update
+  #         sudo apt-get install -y acl crun podman uidmap
+  #         npm install --global "@devcontainers/cli@$DEVCONTAINER_VERSION"
+
+  #     - name: Create isolated fixture identity
+  #       id: fixture
+  #       shell: bash
+  #       env:
+  #         IDENTITY_CASE: ${{ matrix.identity_case }}
+  #         FIXTURE_UID: ${{ matrix.fixture_uid }}
+  #         FIXTURE_GID: ${{ matrix.fixture_gid }}
+  #         SUBID_START: ${{ matrix.subid_start }}
+  #       run: |
+  #         set -euo pipefail
+  #         fixture_user=$(getent passwd "$FIXTURE_UID" | cut -d: -f1 || true)
+  #         if test -z "$fixture_user"; then
+  #           fixture_user="cyclestone-$IDENTITY_CASE"
+  #           getent group "$FIXTURE_GID" >/dev/null \
+  #             || sudo groupadd --gid "$FIXTURE_GID" "$fixture_user"
+  #           sudo useradd --uid "$FIXTURE_UID" --gid "$FIXTURE_GID" \
+  #             --create-home --shell /bin/bash "$fixture_user"
+  #         fi
+  #         test "$(id -u "$fixture_user"):$(id -g "$fixture_user")" = "$FIXTURE_UID:$FIXTURE_GID"
+  #         grep -q "^$fixture_user:" /etc/subuid \
+  #           || sudo usermod --add-subuids "$SUBID_START-$((SUBID_START + 65535))" "$fixture_user"
+  #         grep -q "^$fixture_user:" /etc/subgid \
+  #           || sudo usermod --add-subgids "$SUBID_START-$((SUBID_START + 65535))" "$fixture_user"
+  #         sudo install -d -m 0700 -o "$FIXTURE_UID" -g "$FIXTURE_GID" "/run/user/$FIXTURE_UID"
+  #         for target in "$GITHUB_WORKSPACE" "$RUNNER_TEMP"; do
+  #           path=$target
+  #           while test "$path" != /; do
+  #             sudo setfacl -m "u:$fixture_user:--x" "$path"
+  #             path=$(dirname "$path")
+  #           done
+  #         done
+  #         sudo setfacl -m "u:$fixture_user:r-x" "$GITHUB_WORKSPACE" "$RUNNER_TEMP"
+  #         evidence="$GITHUB_WORKSPACE/dist/evidence/project-devcontainer/$IDENTITY_CASE"
+  #         sudo install -d -m 0755 -o "$FIXTURE_UID" -g "$FIXTURE_GID" "$evidence"
+  #         echo "fixture_user=$fixture_user" >> "$GITHUB_OUTPUT"
+
+  #     - name: Build the local-only base fixture
+  #       shell: bash
+  #       run: |
+  #         set -euo pipefail
+  #         export IMAGE_CREATED
+  #         IMAGE_CREATED=$(date -u -d "$(git show -s --format=%cI HEAD)" +%Y-%m-%dT%H:%M:%SZ)
+  #         IMAGE_TAG=cyclestone-base:project-devcontainer ./scripts/build-base.sh load
+  #         docker image inspect --format '{{.Id}}' cyclestone-base:project-devcontainer \
+  #           > "$RUNNER_TEMP/cyclestone-project-base.iid"
+  #         docker save --output "$RUNNER_TEMP/cyclestone-project-base.tar" \
+  #           cyclestone-base:project-devcontainer
+  #         sudo setfacl -m "u:${{ steps.fixture.outputs.fixture_user }}:r--" \
+  #           "$RUNNER_TEMP/cyclestone-project-base.tar"
+
+  #     - name: Validate build, start, reopen, and rebuild
+  #       shell: bash
+  #       env:
+  #         FIXTURE_USER: ${{ steps.fixture.outputs.fixture_user }}
+  #         FIXTURE_UID: ${{ matrix.fixture_uid }}
+  #         IDENTITY_CASE: ${{ matrix.identity_case }}
+  #       run: |
+  #         set -euo pipefail
+  #         sudo -u "$FIXTURE_USER" env \
+  #           HOME="$(getent passwd "$FIXTURE_USER" | cut -d: -f6)" \
+  #           PATH="$PATH" \
+  #           XDG_RUNTIME_DIR="/run/user/$FIXTURE_UID" \
+  #           podman load --input "$RUNNER_TEMP/cyclestone-project-base.tar"
+  #         raw_id=$(sudo -u "$FIXTURE_USER" env \
+  #           HOME="$(getent passwd "$FIXTURE_USER" | cut -d: -f6)" \
+  #           XDG_RUNTIME_DIR="/run/user/$FIXTURE_UID" \
+  #           podman image inspect --format '{{.Id}}' cyclestone-base:project-devcontainer)
+  #         base_id=$(cat "$RUNNER_TEMP/cyclestone-project-base.iid")
+  #         case "$base_id" in sha256:*) ;; *) base_id=sha256:$base_id ;; esac
+  #         case "$raw_id" in sha256:*) ;; *) raw_id=sha256:$raw_id ;; esac
+  #         test "$raw_id" = "$base_id"
+  #         sudo -u "$FIXTURE_USER" env \
+  #           HOME="$(getent passwd "$FIXTURE_USER" | cut -d: -f6)" \
+  #           PATH="$PATH" \
+  #           XDG_RUNTIME_DIR="/run/user/$FIXTURE_UID" \
+  #           IDENTITY_CASE="$IDENTITY_CASE" \
+  #           CYCLESTONE_BASE_IMAGE_ID="$base_id" \
+  #           CYCLESTONE_BASE_IMAGE_LOCAL=cyclestone-base:project-devcontainer \
+  #           EVIDENCE_DIR="$GITHUB_WORKSPACE/dist/evidence/project-devcontainer/$IDENTITY_CASE" \
+  #           "$GITHUB_WORKSPACE/tests/devcontainer-podman.sh"
+
+  #     - name: Upload project Dev Container evidence
+  #       if: always()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: project-devcontainer-${{ matrix.identity_case }}-evidence
+  #         path: dist/evidence/project-devcontainer/${{ matrix.identity_case }}
+  #         if-no-files-found: error
+  #         retention-days: 30
+
+  # multiarch-oci:
+  #   name: Native multi-architecture OCI archive
+  #   if: inputs.run_multiarch
+  #   needs: [native, workspace-identity, project-devcontainer-podman]
+  #   runs-on: ubuntu-24.04
+  #   timeout-minutes: 90
+  #   steps:
+  #     - name: Check out repository
+  #       uses: actions/checkout@v6
+
+  #     - name: Validate Docker Build Cloud configuration
+  #       env:
+  #         CLOUD_ENDPOINT: ${{ vars.DOCKER_BUILD_CLOUD_ENDPOINT }}
+  #         DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+  #         DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+  #       run: |
+  #         test -n "$CLOUD_ENDPOINT" || { echo 'Missing DOCKER_BUILD_CLOUD_ENDPOINT variable' >&2; exit 1; }
+  #         test -n "$DOCKERHUB_USERNAME" || { echo 'Missing DOCKERHUB_USERNAME secret' >&2; exit 1; }
+  #         test -n "$DOCKERHUB_TOKEN" || { echo 'Missing DOCKERHUB_TOKEN secret' >&2; exit 1; }
+
+  #     - name: Authenticate to Docker
+  #       uses: docker/login-action@v3
+  #       with:
+  #         username: ${{ secrets.DOCKERHUB_USERNAME }}
+  #         password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  #     - name: Set up Buildx
+  #       uses: docker/setup-buildx-action@v3
+
+  #     - name: Configure native cloud builder
+  #       env:
+  #         CLOUD_ENDPOINT: ${{ vars.DOCKER_BUILD_CLOUD_ENDPOINT }}
+  #       run: |
+  #         docker buildx create --driver cloud "$CLOUD_ENDPOINT" --name cyclestone-cloud --use
+  #         docker buildx inspect --bootstrap
+
+  #     - name: Build and inspect OCI archive
+  #       shell: bash
+  #       run: |
+  #         set -euo pipefail
+  #         export IMAGE_CREATED
+  #         IMAGE_CREATED=$(date -u -d "$(git show -s --format=%cI HEAD)" +%Y-%m-%dT%H:%M:%SZ)
+  #         export PLATFORMS=linux/amd64,linux/arm64
+  #         export OCI_OUTPUT="$GITHUB_WORKSPACE/dist/cyclestone-base-${IMAGE_VERSION}.oci.tar"
+  #         mkdir -p dist/evidence/multiarch
+  #         ./scripts/build-base.sh oci 2>&1 | tee dist/evidence/multiarch/build.log
+  #         IMAGE_ARCHIVE=$OCI_OUTPUT IMAGE_PLATFORM=linux/amd64 \
+  #           ./tests/image-inspect.sh 2>&1 | tee dist/evidence/multiarch/inspect-amd64.log
+  #         IMAGE_ARCHIVE=$OCI_OUTPUT IMAGE_PLATFORM=linux/arm64 \
+  #           ./tests/image-inspect.sh 2>&1 | tee dist/evidence/multiarch/inspect-arm64.log
+  #         sha256sum "$OCI_OUTPUT" > dist/evidence/multiarch/archive.sha256
+  #         tar -xOf "$OCI_OUTPUT" index.json > dist/evidence/multiarch/index.json
+
+  #     - name: Upload combined OCI evidence
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: base-image-multiarch-oci
+  #         path: |
+  #           dist/cyclestone-base-*.oci.tar
+  #           dist/evidence/multiarch
+  #         if-no-files-found: error
+  #         retention-days: 30

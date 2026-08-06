@@ -1,0 +1,39 @@
+# Cyclestone internal planning state — intentionally not published.
+# Only the durable decision log and settings are tracked; plans, milestones,
+# reports, state, and temp stay local to the maintainer.
+/.cyclestone/*
+!/.cyclestone/DECISIONS.md
+!/.cyclestone/settings.yml
+# Generated machine-local runtime configuration (portable output is committed).
+/.cyclestone/runtime/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Editor and operating-system files
+/.idea/
+/.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Local Dev Container overrides (maintainer-specific mounts, not published)
+/.devcontainer/devcontainer.local.json
+/.devcontainer/.init.local
+
+# Logs, caches, and temporary files
+*.log
+/.cache/
+/tmp/
+/temp/
+
+# Generated build and test output
+/artifacts/
+/build/
+/coverage/
+/dist/

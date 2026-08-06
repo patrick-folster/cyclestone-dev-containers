@@ -1,0 +1,16 @@
+{
+  "name": "Cyclestone Ollama provider example",
+  "image": "${localEnv:CYCLESTONE_BASE_IMAGE_REF}",
+  "remoteUser": "developer",
+  "containerUser": "developer",
+  "updateRemoteUserUID": false,
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "workspaceFolder": "/workspace",
+  "overrideCommand": true,
+  "privileged": false,
+  "runArgs": [
+    "--userns=keep-id:uid=1000,gid=1000",
+    "--security-opt=no-new-privileges"
+  ],
+  "customizations": {}
+}

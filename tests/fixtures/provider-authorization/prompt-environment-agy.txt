@@ -1,0 +1,22 @@
+Cyclestone provider authorization review
+Provider: Google Antigravity CLI (agy) [agy]
+Description: Google Antigravity CLI access through one exact runtime environment variable.
+Platform: linux
+Access mode: environment
+Source: none
+Destination: none
+Filesystem access: none
+Forwarded variable names: GEMINI_API_KEY
+Host service: none; transport=none; authentication=none
+Credential strategy: runtime-environment
+Import: none
+Synchronization: none
+Refresh: replace the host variable and recreate the session
+Revocation: stop the active session, revoke approval, and rotate the provider key
+Backup: no Cyclestone credential copy; host and process retention remain external
+Security guidance: The API key is inherited by name only at runtime and is readable by every process running as the container user.
+Project identity: git-worktree <PROJECT> device=<DEVICE> inode=<INODE>
+Git directory: <GIT_DIR> device=<DEVICE> inode=<INODE>
+Git common directory: <COMMON_DIR> device=<DEVICE> inode=<INODE>
+Git evidence: object-format=sha1 root-set-sha256=<SHA256>
+Grant duration: [o] allow once; [a] always for this exact project and request; [d] deny

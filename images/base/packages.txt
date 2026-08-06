@@ -1,0 +1,14 @@
+bash
+ca-certificates
+curl
+file
+git
+gzip
+jq
+less
+openssh-client
+procps
+ripgrep
+tar
+unzip
+xz-utils

@@ -1,0 +1,29 @@
+# syntax=docker/dockerfile:1.7
+#
+# Dev Container for the Cyclestone Dev Containers repository.
+# Installs the AI toolset (cyclestone, codex, agy, opencode) natively
+# via the uniform installer shipped in the base image at /usr/local/bin/cyclestone-tools.
+# No npm, no Node.js.
+# Ollama is NOT installed — the container uses the host's ollama via
+# OLLAMA_HOST (set in devcontainer.json + forwarder in initialize.sh).
+#
+# All four AI tools (cyclestone, codex, agy, opencode) are user tools: they
+# install under $HOME as the developer user (cyclestone/codex/agy to
+# ~/.local/bin; opencode to ~/.opencode/bin) so the resulting files are owned
+# by developer and the runtime `cyclestone-tools update` shadowing works.
+# Ollama, if ever added, remains a system tool (root, /usr/local/bin).
+# The tool list is configurable from devcontainer.json via INSTALL_TOOLS_USER
+# without editing this file.
+
+ARG BASE_IMAGE_REF
+FROM ${BASE_IMAGE_REF}
+
+ARG INSTALL_TOOLS_USER=cyclestone,codex,agy,opencode
+
+USER developer
+RUN /usr/local/bin/cyclestone-tools install --tool "${INSTALL_TOOLS_USER}"
+
+USER developer
+WORKDIR /workspace
+ENTRYPOINT ["/usr/local/bin/cyclestone-entrypoint"]
+CMD ["/bin/bash", "-l"]

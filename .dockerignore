@@ -1,0 +1,16 @@
+**
+!images/
+!images/base/
+!images/base/Containerfile
+!images/base/packages.txt
+!images/base/versions.env
+!images/base/entrypoint.sh
+!scripts/
+!scripts/install-tools.sh
+!examples/
+!examples/child-image/
+!examples/child-image/Containerfile
+!tests/
+!tests/fixtures/
+!tests/fixtures/child-image-invalid/
+!tests/fixtures/child-image-invalid/**/Containerfile

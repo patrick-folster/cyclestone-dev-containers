@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "providers": {
+    "ollama": { "enabled": true, "mode": "host-service" }
+  }
+}

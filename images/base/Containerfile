@@ -1,0 +1,123 @@
+# syntax=docker/dockerfile:1.7
+
+ARG BASE_IMAGE
+
+FROM ${BASE_IMAGE} AS acquisition
+ARG TARGETOS
+ARG TARGETARCH
+ARG INSTALL_TOOLS
+ARG DEBIAN_FRONTEND=noninteractive
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl tar gzip xz-utils && \
+    update-ca-certificates
+COPY scripts/install-tools.sh /usr/local/libexec/install-tools
+COPY images/base/packages.txt /tmp/base-packages.txt
+RUN chmod 0755 /usr/local/libexec/install-tools && \
+    mkdir -p /out && \
+    DESTDIR=/out TARGETOS="$TARGETOS" TARGETARCH="$TARGETARCH" \
+    INSTALL_TOOLS="$INSTALL_TOOLS" /usr/local/libexec/install-tools install
+
+FROM ${BASE_IMAGE} AS final
+ARG DEVELOPER_UID=1000
+ARG DEVELOPER_GID=1000
+ARG IMAGE_TITLE
+ARG IMAGE_DESCRIPTION
+ARG IMAGE_SOURCE
+ARG IMAGE_URL
+ARG IMAGE_DOCUMENTATION
+ARG IMAGE_LICENSES
+ARG IMAGE_VERSION
+ARG IMAGE_REVISION
+ARG IMAGE_CREATED
+ARG BASE_DIGEST
+ARG INSTALL_TOOLS
+ARG DEBIAN_FRONTEND=noninteractive
+RUN --mount=type=bind,from=acquisition,source=/tmp/base-packages.txt,target=/tmp/base-packages.txt,readonly \
+    --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update && \
+    xargs -r apt-get install -y --no-install-recommends < /tmp/base-packages.txt && \
+    update-ca-certificates && \
+    apt-get clean && \
+    find /var/lib/apt/lists /var/cache/apt -mindepth 1 -delete && \
+    case "$DEVELOPER_UID:$DEVELOPER_GID" in \
+      *[!0-9:]*|0:*|*:0|:*|*:) echo 'UID and GID must be positive integers' >&2; exit 1 ;; \
+    esac && \
+    if getent passwd ubuntu >/dev/null; then userdel ubuntu; fi && \
+    if getent group ubuntu >/dev/null; then groupdel ubuntu; fi && \
+    ! getent passwd "$DEVELOPER_UID" >/dev/null && \
+    ! getent group "$DEVELOPER_GID" >/dev/null && \
+    groupadd --gid "$DEVELOPER_GID" developer && \
+    useradd --uid "$DEVELOPER_UID" --gid "$DEVELOPER_GID" --no-create-home \
+      --home-dir /home/developer --shell /bin/bash developer && \
+    install -d -o developer -g developer -m 0755 \
+      /workspace /home/developer /home/developer/.config /home/developer/.cache \
+      /home/developer/.local /home/developer/.local/share /home/developer/.local/state \
+      /home/developer/.local/bin \
+      /home/developer/.config/cyclestone \
+      /home/developer/.local/share/cyclestone
+# Cache mounts hide base-layer lock files while mounted; remove their merged-view
+# remnants after unmount so the runtime filesystem is clean.
+RUN find /var/lib/apt/lists /var/cache/apt -mindepth 1 -delete
+COPY --from=acquisition /out/ /
+COPY scripts/install-tools.sh /usr/local/bin/cyclestone-tools
+COPY images/base/entrypoint.sh /usr/local/bin/cyclestone-entrypoint
+RUN chmod 0755 /usr/local/bin/cyclestone-tools /usr/local/bin/cyclestone-entrypoint && \
+    ! command -v sudo >/dev/null 2>&1
+# Install per-user tools (cyclestone, codex, agy, opencode) after the
+# developer user exists. System tools (ollama) were staged in the acquisition
+# stage. All four user tools install under $HOME as the developer user:
+#   cyclestone -> ~/.local/bin/cyclestone (+ ~/.local/share/licenses/cyclestone)
+#   codex      -> ~/.local/bin/codex
+#   agy        -> ~/.local/bin/agy (stages downloads under ~/.cache/antigravity)
+#   opencode   -> ~/.opencode/bin/opencode (hardcoded by installer)
+# Installing as root would leave root-owned files/dirs under /home/developer
+# that the non-root developer cannot write into at runtime, breaking
+# `cyclestone-tools update` (agy fails with curl exit 23 on its staging tree).
+RUN set -eu; \
+    for tool in $(printf '%s' ",${INSTALL_TOOLS:-}," | tr ',' ' '); do \
+      case "$tool" in \
+        cyclestone|codex|agy|opencode) \
+          su -s /bin/sh developer -c \
+            'HOME=/home/developer TARGETOS=linux TARGETARCH="$(uname -m | sed "s/x86_64/amd64/;s/aarch64/arm64/")" \
+             /usr/local/bin/cyclestone-tools install --tool '"$tool" ;; \
+      esac; \
+    done
+# Verify each selected tool is present on PATH. Empty selection is valid (no-op).
+# PATH (set later in ENV) puts ~/.local/bin and ~/.opencode/bin first, so the
+# user-installed tools resolve ahead of any system copy.
+RUN set -eu; \
+    tools="${INSTALL_TOOLS:-}"; \
+    for tool in $(printf '%s' "$tools" | tr ',' ' '); do \
+      case "$tool" in \
+        opencode) test -x /home/developer/.opencode/bin/opencode ;; \
+        cyclestone|codex|agy) test -x /home/developer/.local/bin/"$tool" ;; \
+        *) command -v "$tool" >/dev/null 2>&1 ;; \
+      esac || { echo "verification failed: $tool not on PATH" >&2; exit 1; }; \
+    done
+ENV HOME=/home/developer \
+    XDG_CONFIG_HOME=/home/developer/.config \
+    XDG_CACHE_HOME=/home/developer/.cache \
+    XDG_DATA_HOME=/home/developer/.local/share \
+    CYCLESTONE_CONFIG_DIR=/home/developer/.config/cyclestone \
+    CYCLESTONE_DATA_DIR=/home/developer/.local/share/cyclestone \
+    INSTALL_TOOLS=${INSTALL_TOOLS:-} \
+    PATH=/home/developer/.local/bin:/home/developer/.opencode/bin:/usr/local/bin:/usr/local/sbin:/usr/sbin:/sbin:/usr/bin:/bin
+LABEL org.opencontainers.image.title="$IMAGE_TITLE" \
+      org.opencontainers.image.description="$IMAGE_DESCRIPTION" \
+      org.opencontainers.image.source="$IMAGE_SOURCE" \
+      org.opencontainers.image.url="$IMAGE_URL" \
+      org.opencontainers.image.documentation="$IMAGE_DOCUMENTATION" \
+      org.opencontainers.image.licenses="$IMAGE_LICENSES" \
+      org.opencontainers.image.version="$IMAGE_VERSION" \
+      org.opencontainers.image.revision="$IMAGE_REVISION" \
+      org.opencontainers.image.created="$IMAGE_CREATED" \
+      org.opencontainers.image.base.digest="$BASE_DIGEST" \
+      io.cyclestone.image.version="$IMAGE_VERSION" \
+      io.cyclestone.tools="${INSTALL_TOOLS:-}"
+WORKDIR /workspace
+USER developer
+ENTRYPOINT ["/usr/local/bin/cyclestone-entrypoint"]
+CMD ["/bin/bash", "-l"]

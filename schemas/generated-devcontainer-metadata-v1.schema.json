@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cyclestone.dev/schemas/generated-devcontainer-metadata-v1.schema.json",
+  "title": "Cyclestone generated Dev Container metadata v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "generatorVersion", "inputIdentities", "outputKind", "safeMode"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "generatorVersion": { "const": "1.0.0" },
+    "outputKind": { "enum": ["portable", "local-runtime"] },
+    "safeMode": { "type": "boolean" },
+    "inputIdentities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["projectRequestSha256", "registrySha256", "templateSha256"],
+      "properties": {
+        "projectRequestSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "registrySha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "templateSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  }
+}
+

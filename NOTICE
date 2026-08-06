@@ -1,0 +1,47 @@
+# NOTICE
+
+## Repository source license
+
+The scripts, templates, schemas, documentation, and configuration in this
+repository are licensed under the MIT License — see [LICENSE](./LICENSE).
+
+## Built container image license
+
+The published container image family
+`ghcr.io/patrick-folster/cyclestone-dev-container-base` is a composite artifact whose
+effective license differs from the repository source license. Its SPDX
+license expression is recorded in the `org.opencontainers.image.licenses` OCI
+label and is currently `LicenseRef-Container-Image-Review-Required`.
+
+This custom license reference reflects that the image is a composite of:
+
+- The Ubuntu 24.04 LTS base image, which carries its own upstream licenses
+  (see the base distribution's `/usr/share/doc/*/copyright` files inside the
+  image).
+- The Cyclestone CLI binary, which is MIT-licensed and installed under
+  `/home/developer/.local/share/licenses/cyclestone/` inside the image.
+- Optional provider CLIs (codex, agy, ollama, opencode) acquired at build
+  time from their respective publishers, each under its own upstream license.
+
+Publication of the image is review-gated and signature/provenance-attested;
+see [docs/architecture/threat-model.md](./docs/architecture/threat-model.md)
+and [docs/architecture/release-reproduction.md](./docs/architecture/release-reproduction.md).
+
+## Alpha and experimental status
+
+This repository and the published `ghcr.io/patrick-folster/cyclestone-dev-container-base`
+image family are **alpha** and **experimental** software: early-stage,
+incomplete, and subject to breaking changes without notice. No stability
+guarantee applies to any interface, schema, template, OCI label, CLI command,
+or provider adapter. The software is provided "AS IS" without warranty of any
+kind, and the maintainer `@patrick-folster` is not liable for any damages
+arising from its use. See [DISCLAIMER.md](./DISCLAIMER.md) and
+[LICENSE](./LICENSE) for the full warranty disclaimer and limitation of
+liability.
+
+## Trademarks
+
+"Cyclestone" and the Cyclestone project are maintained by
+`@patrick-folster`. Any product names, service names, or trademarks
+referenced in this repository are the property of their respective owners and
+are used here only for identification and interoperability.

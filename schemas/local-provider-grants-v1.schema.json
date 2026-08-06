@@ -1,0 +1,792 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cyclestone.dev/schemas/local-provider-grants-v1.schema.json",
+  "title": "Cyclestone local provider grants version 1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "grants"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "grants": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/grant"
+      }
+    }
+  },
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "fsid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "device",
+        "inode"
+      ],
+      "properties": {
+        "device": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "inode": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "identity": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "identity_version",
+            "kind",
+            "path",
+            "filesystem"
+          ],
+          "properties": {
+            "identity_version": {
+              "const": 1
+            },
+            "kind": {
+              "const": "directory"
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^/"
+            },
+            "filesystem": {
+              "$ref": "#/$defs/fsid"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "identity_version",
+            "kind",
+            "path",
+            "filesystem",
+            "git"
+          ],
+          "properties": {
+            "identity_version": {
+              "const": 1
+            },
+            "kind": {
+              "const": "git-worktree"
+            },
+            "path": {
+              "type": "string",
+              "pattern": "^/"
+            },
+            "filesystem": {
+              "$ref": "#/$defs/fsid"
+            },
+            "git": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "git_dir",
+                "git_dir_filesystem",
+                "common_dir",
+                "common_dir_filesystem",
+                "object_format",
+                "root_set_sha256"
+              ],
+              "properties": {
+                "git_dir": {
+                  "type": "string",
+                  "pattern": "^/"
+                },
+                "git_dir_filesystem": {
+                  "$ref": "#/$defs/fsid"
+                },
+                "common_dir": {
+                  "type": "string",
+                  "pattern": "^/"
+                },
+                "common_dir_filesystem": {
+                  "$ref": "#/$defs/fsid"
+                },
+                "object_format": {
+                  "enum": [
+                    "sha1",
+                    "sha256"
+                  ]
+                },
+                "root_set_sha256": {
+                  "$ref": "#/$defs/sha"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "sourceFile": {
+      "enum": [
+        "${HOME}/.codex/auth.json",
+        "${HOME}/.local/share/opencode/auth.json"
+      ]
+    },
+    "envName": {
+      "enum": [
+        "ANTHROPIC_API_KEY",
+        "HTTPS_PROXY",
+        "HTTP_PROXY",
+        "NO_PROXY",
+        "OLLAMA_HOST",
+        "GEMINI_API_KEY"
+      ]
+    },
+    "containerDestination": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        null,
+        "/home/developer/.codex/auth.json",
+        "/home/developer/.local/share/opencode/auth.json"
+      ]
+    },
+    "failureCode": {
+      "type": "string",
+      "pattern": "^E_[A-Z_]+$"
+    },
+    "adapterBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "adapter_version",
+        "strategy",
+        "source_files",
+        "environment_names",
+        "container_destination",
+        "access",
+        "import_behavior",
+        "synchronization",
+        "refresh_behavior",
+        "revocation_behavior",
+        "directory_mode",
+        "file_mode",
+        "backup_policy",
+        "failure_codes"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "read-only",
+            "read-write",
+            "environment",
+            "host-service"
+          ]
+        },
+        "adapter_version": {
+          "const": 1
+        },
+        "strategy": {
+          "enum": [
+            "direct-file-mount",
+            "isolated-store",
+            "runtime-environment",
+            "host-service"
+          ]
+        },
+        "source_files": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/sourceFile"
+          }
+        },
+        "environment_names": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/envName"
+          }
+        },
+        "container_destination": {
+          "$ref": "#/$defs/containerDestination"
+        },
+        "access": {
+          "enum": [
+            "read-only",
+            "read-write",
+            "environment",
+            "host-service"
+          ]
+        },
+        "import_behavior": {
+          "type": "string",
+          "minLength": 1
+        },
+        "synchronization": {
+          "type": "string",
+          "minLength": 1
+        },
+        "refresh_behavior": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revocation_behavior": {
+          "type": "string",
+          "minLength": 1
+        },
+        "directory_mode": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "enum": [
+            null,
+            700
+          ]
+        },
+        "file_mode": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "enum": [
+            null,
+            600
+          ]
+        },
+        "backup_policy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "failure_codes": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/failureCode"
+          }
+        }
+      }
+    },
+    "runtimeEnvironmentAdapter": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/adapterBase"
+        },
+        {
+          "properties": {
+            "mode": {
+              "const": "environment"
+            },
+            "strategy": {
+              "const": "runtime-environment"
+            },
+            "access": {
+              "const": "environment"
+            },
+            "source_files": {
+              "const": []
+            },
+            "environment_names": {
+              "type": "array",
+              "minItems": 1
+            },
+            "container_destination": {
+              "const": null
+            },
+            "directory_mode": {
+              "const": null
+            },
+            "file_mode": {
+              "const": null
+            }
+          }
+        }
+      ]
+    },
+    "hostServiceAdapter": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/adapterBase"
+        },
+        {
+          "properties": {
+            "mode": {
+              "const": "host-service"
+            },
+            "strategy": {
+              "const": "host-service"
+            },
+            "access": {
+              "const": "host-service"
+            },
+            "source_files": {
+              "const": []
+            },
+            "environment_names": {
+              "type": "array",
+              "minItems": 1
+            },
+            "container_destination": {
+              "const": null
+            },
+            "directory_mode": {
+              "const": null
+            },
+            "file_mode": {
+              "const": null
+            }
+          }
+        }
+      ]
+    },
+    "directFileMountAdapter": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/adapterBase"
+        },
+        {
+          "properties": {
+            "mode": {
+              "const": "read-only"
+            },
+            "strategy": {
+              "const": "direct-file-mount"
+            },
+            "access": {
+              "const": "read-only"
+            },
+            "source_files": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1
+            },
+            "environment_names": {
+              "const": []
+            },
+            "container_destination": {
+              "type": "string",
+              "minLength": 1
+            },
+            "directory_mode": {
+              "const": null
+            },
+            "file_mode": {
+              "const": 600
+            }
+          }
+        }
+      ]
+    },
+    "isolatedStoreAdapter": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/adapterBase"
+        },
+        {
+          "properties": {
+            "mode": {
+              "const": "read-write"
+            },
+            "strategy": {
+              "const": "isolated-store"
+            },
+            "access": {
+              "const": "read-write"
+            },
+            "source_files": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1
+            },
+            "environment_names": {
+              "const": []
+            },
+            "container_destination": {
+              "type": "string",
+              "minLength": 1
+            },
+            "directory_mode": {
+              "const": 700
+            },
+            "file_mode": {
+              "const": 600
+            }
+          }
+        }
+      ]
+    },
+    "adapter": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/runtimeEnvironmentAdapter"
+        },
+        {
+          "$ref": "#/$defs/hostServiceAdapter"
+        },
+        {
+          "$ref": "#/$defs/directFileMountAdapter"
+        },
+        {
+          "$ref": "#/$defs/isolatedStoreAdapter"
+        }
+      ]
+    },
+    "filesystemNone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "none"
+        }
+      }
+    },
+    "filesystemFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "access",
+        "container_destination",
+        "host_source",
+        "kind"
+      ],
+      "properties": {
+        "access": {
+          "enum": [
+            "read-only",
+            "read-write"
+          ]
+        },
+        "container_destination": {
+          "type": "string",
+          "minLength": 1
+        },
+        "host_source": {
+          "$ref": "#/$defs/sourceFile"
+        },
+        "kind": {
+          "const": "file"
+        }
+      }
+    },
+    "hostServiceNone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "const": "none"
+        }
+      }
+    },
+    "hostServiceHttp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authentication",
+        "default_endpoint",
+        "endpoint_environment",
+        "kind",
+        "transport"
+      ],
+      "properties": {
+        "kind": {
+          "const": "http"
+        },
+        "endpoint_environment": {
+          "$ref": "#/$defs/envName"
+        },
+        "default_endpoint": {
+          "type": "string",
+          "pattern": "^https?://[^\\s]+$"
+        },
+        "transport": {
+          "const": "tcp"
+        },
+        "authentication": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "cli": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "location"
+      ],
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "enum": [
+            "container",
+            "none"
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "location": {
+              "const": "none"
+            },
+            "name": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "properties": {
+            "location": {
+              "const": "container"
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    },
+    "planBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan_version",
+        "registry_version",
+        "provider_id",
+        "display_name",
+        "description",
+        "mode",
+        "platform",
+        "filesystem",
+        "environment_names",
+        "host_service",
+        "required_cli",
+        "credential_adapter",
+        "security_guidance"
+      ],
+      "properties": {
+        "plan_version": {
+          "const": 2
+        },
+        "registry_version": {
+          "const": 2
+        },
+        "provider_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,62}[a-z0-9]$"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "enum": [
+            "read-only",
+            "read-write",
+            "environment",
+            "host-service"
+          ]
+        },
+        "platform": {
+          "const": "linux"
+        },
+        "filesystem": {
+          "type": "object"
+        },
+        "environment_names": {
+          "type": "array",
+          "uniqueItems": true
+        },
+        "host_service": {
+          "type": "object"
+        },
+        "required_cli": {
+          "$ref": "#/$defs/cli"
+        },
+        "credential_adapter": {
+          "$ref": "#/$defs/adapter"
+        },
+        "security_guidance": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "plan": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/planBase"
+        },
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "read-only"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "filesystem": {
+                "$ref": "#/$defs/filesystemFile"
+              },
+              "host_service": {
+                "$ref": "#/$defs/hostServiceNone"
+              },
+              "environment_names": {
+                "const": []
+              },
+              "credential_adapter": {
+                "$ref": "#/$defs/directFileMountAdapter"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "read-write"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "filesystem": {
+                "$ref": "#/$defs/filesystemFile"
+              },
+              "host_service": {
+                "$ref": "#/$defs/hostServiceNone"
+              },
+              "environment_names": {
+                "const": []
+              },
+              "credential_adapter": {
+                "$ref": "#/$defs/isolatedStoreAdapter"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "environment"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "filesystem": {
+                "$ref": "#/$defs/filesystemNone"
+              },
+              "host_service": {
+                "$ref": "#/$defs/hostServiceNone"
+              },
+              "environment_names": {
+                "type": "array",
+                "minItems": 1
+              },
+              "credential_adapter": {
+                "$ref": "#/$defs/runtimeEnvironmentAdapter"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "mode": {
+                "const": "host-service"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "filesystem": {
+                "$ref": "#/$defs/filesystemNone"
+              },
+              "host_service": {
+                "$ref": "#/$defs/hostServiceHttp"
+              },
+              "environment_names": {
+                "type": "array",
+                "minItems": 1
+              },
+              "credential_adapter": {
+                "$ref": "#/$defs/hostServiceAdapter"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "grant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "identity_fingerprint",
+        "request_fingerprint",
+        "identity",
+        "plan",
+        "decision",
+        "created_at"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/sha"
+        },
+        "identity_fingerprint": {
+          "$ref": "#/$defs/sha"
+        },
+        "request_fingerprint": {
+          "$ref": "#/$defs/sha"
+        },
+        "identity": {
+          "$ref": "#/$defs/identity"
+        },
+        "plan": {
+          "$ref": "#/$defs/plan"
+        },
+        "decision": {
+          "const": "always"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        }
+      }
+    }
+  }
+}

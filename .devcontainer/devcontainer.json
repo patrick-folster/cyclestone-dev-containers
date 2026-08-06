@@ -1,0 +1,40 @@
+{
+  "name": "CyclestoneDevContainers",
+  "build": {
+    "dockerfile": "Containerfile",
+    "context": "..",
+    "args": {
+      "BASE_IMAGE_REF": "localhost/cyclestone-base:local",
+      "TARGETOS": "linux",
+      "TARGETARCH": "amd64",
+      "INSTALL_TOOLS_USER": "cyclestone,codex,agy,opencode"
+    }
+  },
+  "remoteUser": "developer",
+  "containerUser": "developer",
+  "updateRemoteUserUID": false,
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "workspaceFolder": "/workspace",
+  "initializeCommand": "${localWorkspaceFolder}/.devcontainer/initialize.sh",
+  "postCreateCommand": "/workspace/.devcontainer/lifecycle.sh postCreate",
+  "overrideCommand": true,
+  "privileged": false,
+  "mounts": [
+    "source=cyclestone-project-go-cache,target=/home/developer/.cache/go-build,type=volume",
+    "source=${localEnv:HOME}/.codex,target=/home/developer/.codex,type=bind",
+    "source=${localEnv:HOME}/.gemini,target=/home/developer/.gemini,type=bind",
+    "source=${localEnv:HOME}/.ssh,target=/home/developer/.ssh,type=bind",
+    "source=${localEnv:HOME}/.ollama,target=/home/developer/.ollama,type=bind",
+    "source=${localEnv:HOME}/.local/share/opencode,target=/home/developer/.local/share/opencode,type=bind",
+    "source=${localEnv:HOME}/.config/opencode,target=/home/developer/.config/opencode,type=bind"
+  ],
+  "runArgs": [
+    "--userns=keep-id:uid=1000,gid=1000",
+    "--security-opt=no-new-privileges",
+    "--runtime=runc",
+    "--cgroupns=private",
+    "--env-file",
+    "${localWorkspaceFolder}/.devcontainer/.env.dynamic"
+  ],
+  "customizations": {}
+}

@@ -1,0 +1,34 @@
+{
+  "name": "Cyclestone project",
+  "build": {
+    "dockerfile": "Containerfile",
+    "context": "..",
+    "args": {
+      "BASE_IMAGE_REF": "${localEnv:CYCLESTONE_BASE_IMAGE_REF}",
+      "TARGETOS": "linux",
+      "TARGETARCH": "amd64",
+      "GO_VERSION": "1.26.5",
+      "GO_BASE_URL": "https://go.dev/dl",
+      "GO_AMD64_ARCHIVE": "go1.26.5.linux-amd64.tar.gz",
+      "GO_AMD64_SHA256": "5c2c3b16caefa1d968a94c1daca04a7ca301a496d9b086e17ad77bb81393f053",
+      "GO_ARM64_ARCHIVE": "go1.26.5.linux-arm64.tar.gz",
+      "GO_ARM64_SHA256": "fe4789e92b1f33358680864bbe8704289e7bb5fc207d80623c308935bd696d49"
+    }
+  },
+  "remoteUser": "developer",
+  "containerUser": "developer",
+  "updateRemoteUserUID": false,
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "workspaceFolder": "/workspace",
+  "postCreateCommand": "/workspace/.devcontainer/lifecycle.sh postCreate",
+  "overrideCommand": true,
+  "privileged": false,
+  "mounts": [
+    "source=cyclestone-project-go-cache,target=/home/developer/.cache/go-build,type=volume"
+  ],
+  "runArgs": [
+    "--userns=keep-id:uid=1000,gid=1000",
+    "--security-opt=no-new-privileges"
+  ],
+  "customizations": {}
+}

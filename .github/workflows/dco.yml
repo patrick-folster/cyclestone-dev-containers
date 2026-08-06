@@ -1,0 +1,62 @@
+name: DCO
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  dco-check:
+    name: Developer Certificate of Origin
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Verify Signed-off-by trailers on every commit
+        shell: bash
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_REF: ${{ github.event.pull_request.head.sha || github.event.after }}
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            range="${BASE_REF}..${HEAD_REF}"
+          else
+            range="${BASE_REF}..${HEAD_REF}"
+          fi
+          # On the very first push of a branch, BASE_REF may be all-zeros; fall back to the single HEAD.
+          if [ "$BASE_REF" = "0000000000000000000000000000000000000000" ]; then
+            range="${HEAD_REF}"
+          fi
+          # A force-push/amend leaves BASE_REF unreachable in a fresh clone; fall back to HEAD.
+          if ! git rev-parse --quiet --verify "${BASE_REF}^{commit}" >/dev/null 2>&1; then
+            range="${HEAD_REF}"
+          fi
+          commits=$(git rev-list "$range")
+          if [ -z "$commits" ]; then
+            echo "DCO: no commits in range; PASS"
+            exit 0
+          fi
+          fail=0
+          for sha in $commits; do
+            msg=$(git show -s --format='%B' "$sha")
+            if ! printf '%s\n' "$msg" | grep -Eq '^Signed-off-by: .+ <[^@]+@[^>]+>$'; then
+              echo "DCO: missing or malformed Signed-off-by on $sha:" >&2
+              printf '%s\n' "$msg" | grep -nE 'Signed-off-by' >&2 || echo "  (no Signed-off-by trailer)" >&2
+              fail=1
+            fi
+          done
+          if [ "$fail" = "1" ]; then
+            echo "DCO: FAIL. Each commit must end with a 'Signed-off-by: Name <email>' trailer." >&2
+            echo "Add it with 'git commit -s' or 'git commit --amend -s --no-edit'." >&2
+            exit 1
+          fi
+          echo "DCO: PASS"
