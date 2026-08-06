@@ -20,7 +20,7 @@ fi
 
 # Load local overrides
 if [ -f "$repo_root/.devcontainer/.init.local" ]; then
-  # shellcheck source=.devcontainer/.init.local
+  # shellcheck source=/dev/null
   . "$repo_root/.devcontainer/.init.local"
 fi
 

@@ -964,3 +964,11 @@ ones but do not rewrite them.
 - **Rationale:** The new name `cyclestone-dev-container-base` accurately states the image's purpose and role as a base development container image.
 - **Consequences:** All references across GitHub Actions workflows, tests, builder scripts, and documentation files are updated.
 - **Supersession:** D-001's canonical image family outcome of `ghcr.io/patrick-folster/cyclestone-dev` is superseded by this decision.
+
+## 2026-08-06 — D-044 Shellcheck source directive for optional local init file
+
+- **Context:** The `initialize.sh` script sources `.devcontainer/.init.local` if it exists. However, because `.init.local` is gitignored, it is not present in the repository on CI/CD (GitHub Actions), which causes ShellCheck to fail with a warning/error when analyzing `initialize.sh` (as it tries to follow the specified source path directive `# shellcheck source=.devcontainer/.init.local`).
+- **Outcome:** The ShellCheck directive in `.devcontainer/initialize.sh` for the optional local config file was changed to `# shellcheck source=/dev/null`.
+- **Rationale:** Sourcing `/dev/null` tells ShellCheck to ignore the missing file without attempting to trace it. This resolves the linting failure in the GitHub Action while maintaining the optional local overrides feature.
+- **Consequences:** The GitHub Action's ShellCheck step passes when `.init.local` is missing.
+- **Supersession:** None.
