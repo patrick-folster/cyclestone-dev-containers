@@ -972,3 +972,12 @@ ones but do not rewrite them.
 - **Rationale:** Sourcing `/dev/null` tells ShellCheck to ignore the missing file without attempting to trace it. This resolves the linting failure in the GitHub Action while maintaining the optional local overrides feature.
 - **Consequences:** The GitHub Action's ShellCheck step passes when `.init.local` is missing.
 - **Supersession:** None.
+
+## 2026-08-06 — D-045 DCO workflow fallback for empty commit range
+
+- **Context:** The Developer Certificate of Origin (DCO) check fails with exit code 128 (`fatal: ambiguous argument '': unknown revision or path not in the working tree.`) during `workflow_dispatch` triggers or manual runs. This is because both `BASE_REF` and `HEAD_REF` are empty, resulting in `range` being set to an empty string when passed to `git rev-list`.
+- **Outcome:** Added a check in `.github/workflows/dco.yml` that falls back to `HEAD^!` (only the latest commit) if `range` resolves to an empty string.
+- **Rationale:** Defaulting to `HEAD^!` ensures that `git rev-list` receives a valid target, avoiding the exit 128 error while checking only the latest commit to prevent scanning the entire repository history.
+- **Consequences:** The DCO check workflow runs successfully on `workflow_dispatch` events without throwing git range errors.
+- **Supersession:** None.
+

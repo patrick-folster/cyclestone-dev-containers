@@ -41,6 +41,10 @@ jobs:
           if ! git rev-parse --quiet --verify "${BASE_REF}^{commit}" >/dev/null 2>&1; then
             range="${HEAD_REF}"
           fi
+          # If the range is empty (e.g. workflow_dispatch), check only the latest commit.
+          if [ -z "$range" ]; then
+            range="HEAD^!"
+          fi
           commits=$(git rev-list "$range")
           if [ -z "$commits" ]; then
             echo "DCO: no commits in range; PASS"
