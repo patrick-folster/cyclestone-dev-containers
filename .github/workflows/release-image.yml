@@ -1,6 +1,7 @@
 name: Release Image Publication
 
 on:
+  workflow_dispatch:
   release:
     types: [published]
 
