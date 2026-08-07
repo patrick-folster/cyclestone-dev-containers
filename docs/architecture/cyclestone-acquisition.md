@@ -14,6 +14,7 @@ Tools are installed in one of two contexts:
   `developer` user under `$HOME` so the resulting files are owned by
   developer and runtime `cyclestone-tools update` works without root.
   cyclestone, codex, and agy install to `/home/developer/.local/bin/`;
+  Codex installs both `codex` and `codex-code-mode-host` there;
   opencode installs to `/home/developer/.opencode/bin/` (hardcoded by its
   installer). PATH in the image puts `~/.local/bin` and `~/.opencode/bin`
   ahead of `/usr/local/bin`, so these resolve at runtime.
@@ -31,7 +32,7 @@ with curl exit 23 ("Failure writing output to destination").
 | Tool | Source | Verification | Build install location |
 | --- | --- | --- | --- |
 | `cyclestone` | GitHub releases latest v-tag | Publisher `checksums.txt` fetched and trusted at build; archive digest verified against it | `/home/developer/.local/bin/cyclestone` |
-| `codex` | GitHub releases latest | Publisher-trusted (HTTPS); no client-side checksum | `/home/developer/.local/bin/codex` |
+| `codex` | GitHub releases latest | Publisher-trusted (HTTPS); exact-tag, architecture-matched pair with structural and CLI-version validation | `/home/developer/.local/bin/codex` and `/home/developer/.local/bin/codex-code-mode-host` |
 | `agy` | `https://antigravity.google/cli/install.sh` with `--dir` | Publisher installer performs internal SHA-512 manifest verification | `/home/developer/.local/bin/agy` |
 | `ollama` | `https://ollama.com/install.sh` | Publisher-trusted (HTTPS); no client-side checksum | `/usr/local/bin/ollama` |
 | `opencode` | `https://opencode.ai/install` with `--no-modify-path` | Publisher-trusted (HTTPS); no client-side checksum | `/home/developer/.opencode/bin/opencode` |
@@ -76,18 +77,41 @@ compatible security improvement.
 
 ## Codex acquisition sequence
 
-1. Download `codex-<arch>-unknown-linux-musl.tar.gz` from
-   `https://github.com/openai/codex/releases/latest/download/` over HTTPS.
-   The GitHub `releases/latest/download` URL redirects to the latest release
-   tag regardless of tag naming (`rust-v*` or `v*`).
-2. Inspect archive members; reject absolute paths, `..` traversal, links, or
-   devices. Expect a single `codex` binary member.
-3. Extract and install atomically into `/home/developer/.local/bin` (user
-   context, as the `developer` user).
+1. Resolve the latest release tag once through
+   `https://api.github.com/repos/openai/codex/releases/latest`. Accept the
+   publisher's `rust-v<version>` or `v<version>` tag forms and validate the
+   normalized release version.
+2. Map the target architecture once and select both official artifacts from
+   that exact tag:
+   - `linux/amd64` → `codex-x86_64-unknown-linux-musl.tar.gz` and
+     `codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz`
+   - `linux/arm64` → `codex-aarch64-unknown-linux-musl.tar.gz` and
+     `codex-code-mode-host-aarch64-unknown-linux-musl.tar.gz`
+   Unsupported targets fail with an explicit error before downloading.
+3. Download both archives over HTTPS into one temporary staging directory.
+   A failure or empty response for either artifact aborts without changing an
+   installed pair.
+4. Inspect each archive before publication. Each must contain exactly one
+   regular member whose name matches the selected target; links, devices,
+   traversal, extra members, and wrong-architecture member names fail closed.
+5. Extract both executables with mode `0755`, verify both staged regular files
+   are executable, and verify staged `codex --version` matches the single
+   resolved release. The host does not expose a reliable version command.
+6. Record the normalized version, target, and SHA-256 of both extracted files
+   in `/home/developer/.local/bin/.codex-install-metadata`. This trusted,
+   user-owned metadata proves which pair the installer published without
+   modifying `~/.codex/config.toml`.
+7. Only after every check passes, publish `codex`, `codex-code-mode-host`, and
+   their metadata through same-filesystem renames. Existing files are retained
+   inside the transaction until all three replacements succeed and are restored
+   if publication fails partway through.
 
-Codex releases do not publish a `checksums.txt` document. The publisher is
-trusted over HTTPS. This reduced verification is documented in the threat
-model.
+The separately distributed Codex executable archives do not use a shared
+`checksums.txt` document in this installer, so the publisher remains trusted
+over HTTPS as before. Exact-tag pairing, strict member validation, version
+validation, and installed-file hashes strengthen consistency but do not replace
+a publisher-signed artifact digest. This reduced authenticity verification is
+documented in the threat model.
 
 ## Agy acquisition sequence
 
@@ -146,13 +170,19 @@ At runtime as the `developer` user:
 - `cyclestone-tools install --tool <name>` installs a tool not selected at
   build time into the user's home (system tools like ollama require rebuild).
 
+Codex install and update always operate on `codex` and
+`codex-code-mode-host` together. Update deliberately stages and republishes the
+complete latest pair even when `codex --version` is already current, repairing a
+missing, non-executable, corrupt, stale, or unprovable host and mismatched
+installation metadata.
+
 ## Verification evidence
 
 The automated repository tests validate the installer with mocked fixtures:
 valid cyclestone install with publisher checksum verification, hostile
 archive rejection (tampered archive, checksum mismatch, symlink member,
-missing or duplicate publisher records), codex install with mocked release
-URL, agy install targeting the user prefix, empty-selection no-op, and
-selection parsing (env, `--tool` args, dedupe, unknown tool rejection,
-comma-list). Native installed-version checks remain required before
-publication.
+missing or duplicate publisher records), paired Codex install/update/repair
+and failure rollback with mocked exact-tag releases, agy install targeting the
+user prefix, empty-selection no-op, and selection parsing (env, `--tool` args,
+dedupe, unknown tool rejection, comma-list). Native installed-version checks
+remain required before publication.

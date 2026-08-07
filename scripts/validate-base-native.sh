@@ -75,6 +75,14 @@ docker run --rm --network none "$cached_image" sh -eu -c '
     cyclestone --version
     cyclestone --help >/dev/null
   fi
+  if printf "%s" ",${INSTALL_TOOLS:-}," | grep -q ",codex,"; then
+    command -v codex
+    command -v codex-code-mode-host
+    test -x /home/developer/.local/bin/codex
+    test -x /home/developer/.local/bin/codex-code-mode-host
+    codex --version
+    codex features list
+  fi
 '
 
 if test "$validation_id" = C2; then
@@ -90,6 +98,14 @@ docker run --rm --user 0 --entrypoint sh "$cached_image" -eu -c '
     cyclestone --version
     file /home/developer/.local/bin/cyclestone
     ldd /home/developer/.local/bin/cyclestone 2>&1 || true
+  fi
+  if printf "%s" ",${INSTALL_TOOLS:-}," | grep -q ",codex,"; then
+    sha256sum /home/developer/.local/bin/codex \
+      /home/developer/.local/bin/codex-code-mode-host \
+      /home/developer/.local/bin/.codex-install-metadata
+    codex --version
+    file /home/developer/.local/bin/codex \
+      /home/developer/.local/bin/codex-code-mode-host
   fi
   dpkg-query -W -f="\${Package}\t\${Version}\n" | LC_ALL=C sort
 ' > "$evidence_dir/runtime-inventory.txt"

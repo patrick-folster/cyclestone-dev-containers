@@ -70,7 +70,7 @@ RUN chmod 0755 /usr/local/bin/cyclestone-tools /usr/local/bin/cyclestone-entrypo
 # developer user exists. System tools (ollama) were staged in the acquisition
 # stage. All four user tools install under $HOME as the developer user:
 #   cyclestone -> ~/.local/bin/cyclestone (+ ~/.local/share/licenses/cyclestone)
-#   codex      -> ~/.local/bin/codex
+#   codex      -> ~/.local/bin/codex + ~/.local/bin/codex-code-mode-host
 #   agy        -> ~/.local/bin/agy (stages downloads under ~/.cache/antigravity)
 #   opencode   -> ~/.opencode/bin/opencode (hardcoded by installer)
 # Installing as root would leave root-owned files/dirs under /home/developer
@@ -93,7 +93,9 @@ RUN set -eu; \
     for tool in $(printf '%s' "$tools" | tr ',' ' '); do \
       case "$tool" in \
         opencode) test -x /home/developer/.opencode/bin/opencode ;; \
-        cyclestone|codex|agy) test -x /home/developer/.local/bin/"$tool" ;; \
+        codex) test -x /home/developer/.local/bin/codex && \
+               test -x /home/developer/.local/bin/codex-code-mode-host ;; \
+        cyclestone|agy) test -x /home/developer/.local/bin/"$tool" ;; \
         *) command -v "$tool" >/dev/null 2>&1 ;; \
       esac || { echo "verification failed: $tool not on PATH" >&2; exit 1; }; \
     done

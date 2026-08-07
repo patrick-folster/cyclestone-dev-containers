@@ -70,7 +70,7 @@ validation (C6/V8) exercises these paths on the current commit.
 - Cyclestone latest v-tag GitHub Release, publisher `checksums.txt`, and
   archive member inspection, validated via `tests/install-tools.sh` mocked
   fixtures. Resolved version recorded per build.
-- Codex, agy, ollama, and opencode publisher-trusted native installers over
+- Paired Codex artifacts and agy, ollama, and opencode publisher-trusted native installers over
   HTTPS, validated via `tests/install-tools.sh` mocked fixtures.
 - Canonical Ubuntu lifecycle documentation (Ubuntu 24.04 standard maintenance
   through May 2029), inspected 2026-07-31.

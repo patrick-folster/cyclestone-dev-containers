@@ -27,7 +27,7 @@ release digest. Those compromises are residual platform risks.
 | Running container | Partially trusted process boundary, not a security boundary equivalent to a VM | Non-root, no privilege, minimal capabilities/mounts, runtime isolation |
 | Provider CLIs | May be installed in the base via `INSTALL_TOOLS` build arg or supplied by a child image; either way they process untrusted remote/local data and exposed credentials | Reviewed exact-file/name adapter, non-root runtime, format failure without broader fallback |
 | Local services | Ollama access is an explicit approved host-service mode; other services remain unsupported | Exact `OLLAMA_HOST` name and HTTP metadata, runtime-only host value, no socket/model mount |
-| Registries/download sources | Serve untrusted bytes until digest/checksum validation; availability is not trusted | HTTPS, pinned image digest, publisher checksum for cyclestone (fetched at build), publisher-trusted installers for agy/ollama/opencode, HTTPS-only for codex, fail closed |
+| Registries/download sources | Serve untrusted bytes until digest/checksum validation; availability is not trusted | HTTPS, pinned image digest, publisher checksum for cyclestone (fetched at build), publisher-trusted installers for agy/ollama/opencode, exact-tag paired artifacts and HTTPS-only authenticity for codex, fail closed |
 | CI | Trusted release principal with repository, token, cache, runner, and artifact access | Minimal permissions, isolated jobs, protected environments, no secrets on untrusted changes |
 | Future teams/users | Have no implicit identity, role, tenant, or shared-resource trust | Feature-specific authentication, authorization, identity, audit, and tenancy design first |
 

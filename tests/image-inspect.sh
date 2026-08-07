@@ -307,6 +307,14 @@ docker run --rm --user 0 --entrypoint /bin/sh "$image" -eu -c '
     file /home/developer/.local/bin/cyclestone
     ldd /home/developer/.local/bin/cyclestone 2>&1 || true
   fi
+  if printf "%s" ",$tools," | grep -q ",codex,"; then
+    test -f /home/developer/.local/bin/codex
+    test -x /home/developer/.local/bin/codex
+    test -f /home/developer/.local/bin/codex-code-mode-host
+    test -x /home/developer/.local/bin/codex-code-mode-host
+    test "$(stat -c %U:%G /home/developer/.local/bin/codex /home/developer/.local/bin/codex-code-mode-host | uniq)" = developer:developer
+    file /home/developer/.local/bin/codex /home/developer/.local/bin/codex-code-mode-host
+  fi
   dpkg-query -W -f="\${Package}\t\${Version}\n" | LC_ALL=C sort
 ' || fail 'filesystem, package, runtime, or linkage inspection failed'
 
@@ -322,6 +330,10 @@ normalized_evidence() {
       'tools="${INSTALL_TOOLS:-}"
        if printf "%s" ",$tools," | grep -q ",cyclestone,"; then
          sha256sum /home/developer/.local/bin/cyclestone; cyclestone --version
+       fi
+       if printf "%s" ",$tools," | grep -q ",codex,"; then
+         sha256sum /home/developer/.local/bin/codex /home/developer/.local/bin/codex-code-mode-host /home/developer/.local/bin/.codex-install-metadata
+         codex --version
        fi
        dpkg-query -W -f="\${Package}\t\${Version}\n" | sort; stat -c "%n %U:%G %a" /home/developer /workspace /home/developer/.config /home/developer/.cache /home/developer/.local/share /home/developer/.config/cyclestone /home/developer/.local/share/cyclestone'
   } > "$output"

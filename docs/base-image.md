@@ -10,7 +10,7 @@ non-root `developer` in `/workspace`.
 ## Contents
 
 `images/base/packages.txt` is the reviewed direct-package allow-list. It supplies
-Bash; Git; the OpenSSH client; CA certificates; `curl`; `tar`, gzip, unzip, and
+Bash; bubblewrap; Git; the OpenSSH client; CA certificates; `curl`; `tar`, gzip, unzip, and
 xz archive support; `rg` search; `jq` structured-data inspection; `file` binary
 inspection; `less`; and `ps`/process inspection. Automated inspection records
 the full transitive `dpkg` closure rather than treating the direct list as the
@@ -50,9 +50,12 @@ Pass `INSTALL_TOOLS` as a comma-separated list to `scripts/build-base.sh`:
 INSTALL_TOOLS=cyclestone,codex,agy,ollama,opencode ./scripts/build-base.sh load
 ```
 
-System tools (cyclestone, codex, agy, ollama) install to `/usr/local/bin`.
-OpenCode installs to `/home/developer/.opencode/bin` (installer default). PATH
-covers both.
+Cyclestone, Codex, and agy install as `developer` to
+`/home/developer/.local/bin`; OpenCode installs to
+`/home/developer/.opencode/bin` (installer default). Codex installation includes
+both `codex` and `codex-code-mode-host`, and install/update keep the two on one
+resolved release. Ollama is the only system tool and installs to
+`/usr/local/bin`. PATH covers all three prefixes.
 
 ### Runtime updates
 

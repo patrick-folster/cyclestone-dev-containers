@@ -6,7 +6,7 @@
 #   - cyclestone install with mocked GitHub API + fixtures (pinned v-tag)
 #   - cyclestone hostile-fixture rejection (tampered archive, checksum mismatch,
 #     symlink member, missing publisher record, duplicate record)
-#   - codex install with mocked release URL (publisher-trusted, no checksum)
+#   - paired Codex install/update/repair, rollback, and architecture mapping
 #   - selection parsing (INSTALL_TOOLS env, --tool args, dedupe, unknown tool)
 #
 # All network access is mocked via a curl stub that serves local fixtures.
@@ -48,7 +48,7 @@ make_cyclestone_archive() {
   tar -czf "$fixture/$archive_name" \
     -C "$fixture/content" CHANGELOG.md LICENSE.md README.md cyclestone
   # GitHub API JSON fixture: releases/latest returns tag_name + assets.
-  cat > "$fixture/release.json" <<EOF
+  cat > "$fixture/cyclestone-release.json" <<EOF
 {"tag_name":"$tag","name":"$version","assets":[]}
 EOF
 }
@@ -62,17 +62,30 @@ make_cyclestone_checksums() {
   printf '%s\n' "$archive_sha"
 }
 
-make_codex_archive() {
+make_codex_pair() {
   fixture=$1
-  mkdir -p "$fixture/content"
-  printf '#!/bin/sh\necho "codex 0.146.0"\n' > "$fixture/content/codex"
-  chmod 0755 "$fixture/content/codex"
-  tar -czf "$fixture/codex-x86_64-unknown-linux-musl.tar.gz" \
-    -C "$fixture/content" codex
+  version=${2:-0.146.0}
+  target=${3:-x86_64-unknown-linux-musl}
+  marker=${4:-$version}
+  mkdir -p "$fixture/codex-content-$target"
+  printf '#!/bin/sh\necho "codex-cli %s"\n# %s\n' "$version" "$marker" \
+    > "$fixture/codex-content-$target/codex-$target"
+  printf '#!/bin/sh\necho "code-mode-host %s"\n' "$marker" \
+    > "$fixture/codex-content-$target/codex-code-mode-host-$target"
+  chmod 0755 \
+    "$fixture/codex-content-$target/codex-$target" \
+    "$fixture/codex-content-$target/codex-code-mode-host-$target"
+  tar -czf "$fixture/codex-$target.tar.gz" \
+    -C "$fixture/codex-content-$target" "codex-$target"
+  tar -czf "$fixture/codex-code-mode-host-$target.tar.gz" \
+    -C "$fixture/codex-content-$target" "codex-code-mode-host-$target"
+  cat > "$fixture/codex-release.json" <<EOF
+{"tag_name":"rust-v$version","name":"$version","assets":[]}
+EOF
 }
 
 # ---------------------------------------------------------------------------
-# curl stub: serves local fixture files by URL basename
+# curl stub: serves local fixture files by URL and basename
 # ---------------------------------------------------------------------------
 
 make_curl_stub() {
@@ -93,14 +106,25 @@ while test "$#" -gt 0; do
 done
 # Resolve fixture by URL basename; GitHub API responses use a special map.
 base=${url##*/}
+if test "${CURL_FAIL_BASENAME:-}" = "$base"; then
+  echo "injected curl failure for $base" >&2
+  exit 22
+fi
 case "$base" in
   install.sh|install)
-    # Map install.sh / install to opencode/agy/ollama installer fixtures.
-    payload="$FIXTURE_DIR/$INSTALLER_FIXTURE"
+    case "$url" in
+      *antigravity.google*) payload="$FIXTURE_DIR/agy-install.sh" ;;
+      *opencode.ai*) payload="$FIXTURE_DIR/opencode-install.sh" ;;
+      *ollama.com*) payload="$FIXTURE_DIR/ollama-install.sh" ;;
+      *) payload="$FIXTURE_DIR/${INSTALLER_FIXTURE:-install.sh}" ;;
+    esac
     ;;
   latest)
-    # GitHub API endpoint for releases/latest — serve tag JSON fixture
-    payload="$FIXTURE_DIR/release.json"
+    case "$url" in
+      *patrick-folster/cyclestone*) payload="$FIXTURE_DIR/cyclestone-release.json" ;;
+      *openai/codex*) payload="$FIXTURE_DIR/codex-release.json" ;;
+      *) payload="$FIXTURE_DIR/release.json" ;;
+    esac
     ;;
   *)
     payload="$FIXTURE_DIR/$base"
@@ -139,8 +163,7 @@ run_installer() {
     DESTDIR="$destination" \
     HOME="$destination" \
     TARGETOS=linux TARGETARCH=amd64 \
-    $env_vars \
-    "$installer" "$@"
+    env $env_vars "$installer" "$@"
 }
 
 expect_failure() {
@@ -149,6 +172,39 @@ expect_failure() {
   if "$@" >/dev/null 2>&1; then
     fail "$description unexpectedly succeeded"
   fi
+}
+
+assert_codex_pair() {
+  destination=$1
+  version=$2
+  target=${3:-x86_64-unknown-linux-musl}
+  bin_dir=$destination/.local/bin
+  test -f "$bin_dir/codex" && test -x "$bin_dir/codex" \
+    || fail 'codex is not a regular executable file'
+  test -f "$bin_dir/codex-code-mode-host" && test -x "$bin_dir/codex-code-mode-host" \
+    || fail 'codex-code-mode-host is not a regular executable file'
+  test "$("$bin_dir/codex" --version | awk '{print $NF}')" = "$version" \
+    || fail "codex does not report expected version $version"
+  metadata=$bin_dir/.codex-install-metadata
+  test -f "$metadata" || fail 'codex installation metadata is missing'
+  grep -Fx "version=$version" "$metadata" >/dev/null \
+    || fail "metadata does not record Codex $version"
+  grep -Fx "target=$target" "$metadata" >/dev/null \
+    || fail "metadata does not record Codex target $target"
+  main_sha=$(sha256sum "$bin_dir/codex" | awk '{print $1}')
+  host_sha=$(sha256sum "$bin_dir/codex-code-mode-host" | awk '{print $1}')
+  grep -Fx "codex_sha256=$main_sha" "$metadata" >/dev/null \
+    || fail 'metadata main-binary hash is stale'
+  grep -Fx "codex_code_mode_host_sha256=$host_sha" "$metadata" >/dev/null \
+    || fail 'metadata host hash is stale'
+}
+
+codex_pair_hashes() {
+  destination=$1
+  sha256sum \
+    "$destination/.local/bin/codex" \
+    "$destination/.local/bin/codex-code-mode-host" \
+    "$destination/.local/bin/.codex-install-metadata"
 }
 
 # ---------------------------------------------------------------------------
@@ -217,15 +273,98 @@ expect_failure 'unsafe archive member rejected' \
 echo "PASS: cyclestone hostile-fixture rejection"
 
 # ---------------------------------------------------------------------------
-# Test 4: codex install with mocked release URL (publisher-trusted)
+# Test 4: Codex installs and repairs one release-matched executable pair
 # ---------------------------------------------------------------------------
 
 codex_fixture=$test_root/codex
-make_codex_archive "$codex_fixture"
+make_codex_pair "$codex_fixture" 0.146.0
 codex_out=$test_root/out-codex
 INSTALL_TOOLS="codex" run_installer "$codex_fixture" "$codex_out" -- install
-test -x "$codex_out/.local/bin/codex" || fail 'codex binary was not installed'
-echo "PASS: codex install with mocked release URL"
+assert_codex_pair "$codex_out" 0.146.0
+
+# Repeating install is idempotent and retains a complete, matching pair.
+first_pair_hashes=$(codex_pair_hashes "$codex_out")
+INSTALL_TOOLS="codex" run_installer "$codex_fixture" "$codex_out" -- install
+test "$(codex_pair_hashes "$codex_out")" = "$first_pair_hashes" \
+  || fail 'repeated Codex install changed identical release contents'
+
+# Updating an older matching pair replaces both artifacts from one new release.
+make_codex_pair "$codex_fixture" 0.147.0 x86_64-unknown-linux-musl fresh-0.147.0
+run_installer "$codex_fixture" "$codex_out" -- update --tool codex
+assert_codex_pair "$codex_out" 0.147.0
+grep -F 'fresh-0.147.0' "$codex_out/.local/bin/codex" >/dev/null \
+  || fail 'Codex main binary was not updated'
+test "$("$codex_out/.local/bin/codex-code-mode-host")" = 'code-mode-host fresh-0.147.0' \
+  || fail 'Codex code-mode host was not updated'
+
+# A current main with a missing or non-executable host must be repaired.
+rm -f "$codex_out/.local/bin/codex-code-mode-host"
+run_installer "$codex_fixture" "$codex_out" -- update --tool codex
+assert_codex_pair "$codex_out" 0.147.0
+chmod 0644 "$codex_out/.local/bin/codex-code-mode-host"
+run_installer "$codex_fixture" "$codex_out" -- update --tool codex
+assert_codex_pair "$codex_out" 0.147.0
+
+# Stale/mismatched contents and metadata are replaced as a complete unit.
+printf '#!/bin/sh\necho stale-host\n' > "$codex_out/.local/bin/codex-code-mode-host"
+chmod 0755 "$codex_out/.local/bin/codex-code-mode-host"
+sed 's/version=0.147.0/version=0.145.0/' \
+  "$codex_out/.local/bin/.codex-install-metadata" \
+  > "$codex_out/.local/bin/.codex-install-metadata.tmp"
+mv "$codex_out/.local/bin/.codex-install-metadata.tmp" \
+  "$codex_out/.local/bin/.codex-install-metadata"
+run_installer "$codex_fixture" "$codex_out" -- update --tool codex
+assert_codex_pair "$codex_out" 0.147.0
+echo "PASS: Codex fresh install, idempotence, update, and repair"
+
+# Download and validation failures must leave all installed state unchanged.
+stable_pair_hashes=$(codex_pair_hashes "$codex_out")
+main_archive=codex-x86_64-unknown-linux-musl.tar.gz
+host_archive=codex-code-mode-host-x86_64-unknown-linux-musl.tar.gz
+expect_failure 'Codex main download failure' \
+  env CURL_FAIL_BASENAME="$main_archive" INSTALL_TOOLS=codex \
+  run_installer "$codex_fixture" "$codex_out" -- update --tool codex
+test "$(codex_pair_hashes "$codex_out")" = "$stable_pair_hashes" \
+  || fail 'main download failure changed the installed Codex pair'
+expect_failure 'Codex host download failure' \
+  env CURL_FAIL_BASENAME="$host_archive" INSTALL_TOOLS=codex \
+  run_installer "$codex_fixture" "$codex_out" -- update --tool codex
+test "$(codex_pair_hashes "$codex_out")" = "$stable_pair_hashes" \
+  || fail 'host download failure changed the installed Codex pair'
+
+validation_fixture=$test_root/codex-invalid
+make_codex_pair "$validation_fixture" 0.148.0
+mkdir -p "$validation_fixture/invalid"
+printf 'not-the-host\n' > "$validation_fixture/invalid/unexpected"
+tar -czf "$validation_fixture/$host_archive" \
+  -C "$validation_fixture/invalid" unexpected
+expect_failure 'Codex host validation failure' \
+  env INSTALL_TOOLS=codex \
+  run_installer "$validation_fixture" "$codex_out" -- update --tool codex
+test "$(codex_pair_hashes "$codex_out")" = "$stable_pair_hashes" \
+  || fail 'validation failure changed the installed Codex pair'
+expect_failure 'Codex partial publication failure' \
+  env CYCLESTONE_TOOLS_TESTING=1 \
+  CYCLESTONE_TOOLS_TEST_FAULT=codex-after-main-publish INSTALL_TOOLS=codex \
+  run_installer "$codex_fixture" "$codex_out" -- update --tool codex
+test "$(codex_pair_hashes "$codex_out")" = "$stable_pair_hashes" \
+  || fail 'partial publication failure did not restore the previous Codex pair'
+echo "PASS: Codex failures preserve the previous pair"
+
+# Both supported architecture mappings select their matching artifact pair.
+arm_fixture=$test_root/codex-arm64
+make_codex_pair "$arm_fixture" 0.147.0 aarch64-unknown-linux-musl arm64
+arm_out=$test_root/out-codex-arm64
+run_installer "$arm_fixture" "$arm_out" TARGETARCH=arm64 -- install --tool codex
+assert_codex_pair "$arm_out" 0.147.0 aarch64-unknown-linux-musl
+unsupported_log=$test_root/codex-unsupported.log
+if run_installer "$codex_fixture" "$test_root/out-codex-unsupported" TARGETARCH=s390x \
+    -- install --tool codex >"$unsupported_log" 2>&1; then
+  fail 'unsupported Codex architecture unexpectedly succeeded'
+fi
+grep -F 'unsupported codex architecture: s390x' "$unsupported_log" >/dev/null \
+  || fail 'unsupported Codex architecture did not produce a clear error'
+echo "PASS: Codex architecture mapping and unsupported-platform error"
 
 # ---------------------------------------------------------------------------
 # Test 4b: agy install targets the user prefix, not the system prefix
@@ -241,7 +380,7 @@ echo "PASS: codex install with mocked release URL"
 
 agy_fixture=$test_root/agy
 mkdir -p "$agy_fixture"
-cat > "$agy_fixture/install.sh" <<'AGY_INSTALLER_FIXTURE'
+cat > "$agy_fixture/agy-install.sh" <<'AGY_INSTALLER_FIXTURE'
 #!/bin/bash
 set -euo pipefail
 prefix=
@@ -265,12 +404,12 @@ fi
 printf '#!/bin/sh\necho 1.1.10\n' > "$prefix/agy"
 chmod +x "$prefix/agy"
 AGY_INSTALLER_FIXTURE
-chmod +x "$agy_fixture/install.sh"
+chmod +x "$agy_fixture/agy-install.sh"
 
 # run_installer already sandboxes HOME to the destination; pass the fixture
 # dir and a fresh destination. INSTALLER_FIXTURE selects install.sh.
 agy_out=$test_root/out-agy
-INSTALL_TOOLS="agy" INSTALLER_FIXTURE=install.sh \
+INSTALL_TOOLS="agy" \
   run_installer "$agy_fixture" "$agy_out" -- install
 # agy must land in the user prefix under HOME, not the system prefix.
 test -x "$agy_out/.local/bin/agy" \
@@ -297,7 +436,7 @@ printf '#!/bin/sh\necho stale\n' > "$agy_update_out/.local/bin/agy"
 chmod +x "$agy_update_out/.local/bin/agy"
 test -x "$agy_update_out/.local/bin/agy" || fail 'stale agy sentinel was not planted'
 
-INSTALL_TOOLS="agy" INSTALLER_FIXTURE=install.sh \
+INSTALL_TOOLS="agy" \
   run_installer "$agy_fixture" "$agy_update_out" -- update --tool agy
 # update must have replaced the stale sentinel with the fixture's 1.1.10 build.
 new_ver=$("$agy_update_out/.local/bin/agy" 2>/dev/null || true)
@@ -329,15 +468,39 @@ test -x "$good3_out/.local/bin/cyclestone" || fail 'dedupe did not install cycle
 expect_failure 'unknown tool rejected' \
   env INSTALL_TOOLS="bogus" run_installer "$test_root" "$test_root/out-bogus" -- install
 
-# 5d: comma-list in INSTALL_TOOLS env (cyclestone + codex)
+# 5d: comma-list in INSTALL_TOOLS env installs the complete Codex pair
 mixed=$test_root/mixed
 make_cyclestone_archive "$mixed" regular 0.0.4
 make_cyclestone_checksums "$mixed" 0.0.4
-make_codex_archive "$mixed"
+make_codex_pair "$mixed" 0.146.0
 mixed_out=$test_root/out-mixed
 INSTALL_TOOLS="cyclestone,codex" run_installer "$mixed" "$mixed_out" -- install
 test -x "$mixed_out/.local/bin/cyclestone" || fail 'mixed: cyclestone not installed'
-test -x "$mixed_out/.local/bin/codex" || fail 'mixed: codex not installed'
+assert_codex_pair "$mixed_out" 0.146.0
+
+# The no-selector general update path dispatches through the same paired Codex
+# updater while preserving the existing behavior of all other user tools.
+cp "$agy_fixture/agy-install.sh" "$mixed/agy-install.sh"
+cat > "$mixed/opencode-install.sh" <<'OPENCODE_INSTALLER_FIXTURE'
+#!/bin/bash
+set -euo pipefail
+mkdir -p "$HOME/.opencode/bin"
+printf '#!/bin/sh\necho 1.2.3\n' > "$HOME/.opencode/bin/opencode"
+chmod 0755 "$HOME/.opencode/bin/opencode"
+OPENCODE_INSTALLER_FIXTURE
+chmod 0755 "$mixed/opencode-install.sh"
+all_tools_out=$test_root/out-all-tools
+INSTALL_TOOLS="cyclestone,codex,agy,opencode" \
+  run_installer "$mixed" "$all_tools_out" -- install
+assert_codex_pair "$all_tools_out" 0.146.0
+test -x "$all_tools_out/.local/bin/cyclestone" || fail 'all-tools install missed cyclestone'
+test -x "$all_tools_out/.local/bin/agy" || fail 'all-tools install missed agy'
+test -x "$all_tools_out/.opencode/bin/opencode" || fail 'all-tools install missed opencode'
+run_installer "$mixed" "$mixed_out" -- update
+assert_codex_pair "$mixed_out" 0.146.0
+test -x "$mixed_out/.local/bin/cyclestone" || fail 'general update broke cyclestone'
+test -x "$mixed_out/.local/bin/agy" || fail 'general update did not update agy'
+test -x "$mixed_out/.opencode/bin/opencode" || fail 'general update did not update opencode'
 
 echo "PASS: selection parsing (env, --tool, dedupe, unknown, comma-list)"
 

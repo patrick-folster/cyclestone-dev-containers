@@ -996,3 +996,51 @@ ones but do not rewrite them.
 - **Rationale:** The `actions/attest-build-provenance` action requires explicit `attestations: write` privileges (along with `id-token: write`) to securely publish and link attestation metadata back to the repository.
 - **Consequences:** Build attestations can be successfully created and persisted when running the release workflow.
 - **Supersession:** None.
+
+## 2026-08-07 — D-048 Codex CLI and code-mode host form one installation unit
+
+- **Context:** The Codex installer downloaded and replaced only the `codex`
+  release artifact. Current Codex Code Mode also requires the official
+  `codex-code-mode-host` companion, and the host has no reliable version
+  command. A current CLI therefore did not prove a complete or release-matched
+  installation.
+- **Outcome:** Codex release resolution now occurs once per operation. Linux
+  `amd64` and `arm64` map to the matching `x86_64-unknown-linux-musl` and
+  `aarch64-unknown-linux-musl` CLI/host artifact pairs from that exact official
+  OpenAI release tag. Both archives are downloaded and structurally validated
+  before publication. The installed release, target, and both file hashes are
+  recorded in user-owned metadata. A same-filesystem transaction retains and
+  restores the prior CLI, host, and metadata if paired publication fails.
+- **Rationale:** Treating both executables as one staged unit prevents fresh
+  installs, updates, and repairs from leaving Code Mode absent or mismatched.
+  Always reinstalling the complete resolved pair also repairs incomplete state
+  without trusting host presence as version evidence.
+- **Consequences:** Selecting Codex installs executable regular files at
+  `/home/developer/.local/bin/codex` and
+  `/home/developer/.local/bin/codex-code-mode-host`, both owned by the installing
+  `developer` user with mode `0755`. `cyclestone-tools update` and
+  `update --tool codex` repair the pair even when the CLI already reports the
+  latest release. Codex retains its existing publisher-trusted HTTPS
+  authenticity convention; exact-tag pairing and staged hashes add consistency
+  evidence but are not a publisher signature.
+- **Supersession:** D-038 and D-041 are amended only for Codex's paired artifact
+  contents; their tool selection, user install context, and runtime update
+  decisions remain in force.
+
+## 2026-08-07 — D-049 Install bubblewrap on PATH for Codex sandbox
+
+- **Context:** Codex requires `bubblewrap` (bwrap) on the host `PATH` for its sandboxing capabilities. Without it, Codex emits a warning at startup: `"Codex could not find bubblewrap on PATH. Install bubblewrap with your OS package manager. See the sandbox prerequisites... Codex will use the bundled bubblewrap in the meantime."`
+- **Outcome:** Added `bubblewrap` to the base image's direct-package list at `images/base/packages.txt`.
+- **Rationale:** Installing `bubblewrap` natively via the base image's package manager puts the `bwrap` executable on the container's `PATH`. This satisfies Codex's sandboxing prerequisites and eliminates the startup warning.
+- **Consequences:** The next rebuild of the base image `localhost/cyclestone-base:local` (and subsequent dev containers built from it) will natively contain `bubblewrap` on `PATH`, fixing the warning. No additional toolchain configuration or custom build commands are needed.
+- **Supersession:** None.
+
+## 2026-08-07 — D-050 Local and offline-friendly base image build script
+
+- **Context:** The standard base image builders `scripts/build-base.sh` and `scripts/build-base-podman.sh` require several mandatory metadata environment variables to be set, hardcode remote image pulling (`--pull=always`), and default tags to registry paths or test tags. This makes offline and simple local-first builder runs inconvenient.
+- **Outcome:** Created a wrapper script at `scripts/build-base-local.sh` that detects or defaults the required metadata environment variables (`IMAGE_VERSION`, `IMAGE_REVISION`, `IMAGE_CREATED`, and `IMAGE_LICENSES`), defaults the tag to `localhost/cyclestone-base:local` (matching the Dev Container default), automatically detects the available container engine (`podman` or `docker`), and defaults to a `--pull=missing` policy (which permits offline builds when base layers are cached).
+- **Rationale:** Providing a pre-configured local builder script dramatically improves the developer experience when testing local modifications or building offline, without risking any configuration discrepancies with the core release scripts.
+- **Consequences:** Developers can run `./scripts/build-base-local.sh` with zero arguments to build and tag the base image locally.
+- **Supersession:** None.
+
+

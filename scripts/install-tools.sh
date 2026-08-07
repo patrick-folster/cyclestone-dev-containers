@@ -3,7 +3,7 @@
 #
 # Tools (all opt-in via INSTALL_TOOLS env or repeated --tool args):
 #   cyclestone  GitHub releases latest v-tag, publisher checksums.txt verified
-#   codex       GitHub releases latest, publisher-trusted (no client checksum)
+#   codex       GitHub releases latest, paired CLI/code-mode-host artifacts
 #   agy         antigravity.google installer, --dir override, internal SHA-512 manifest
 #   ollama      ollama.com installer, publisher-trusted (no client checksum)
 #   opencode    opencode.ai installer, --no-modify-path, publisher-trusted (no client checksum)
@@ -281,56 +281,180 @@ status_cyclestone() {
 }
 
 # ---------------------------------------------------------------------------
-# Codex (GitHub releases latest, publisher-trusted, no client checksum)
+# Codex (GitHub releases latest, publisher-trusted paired artifacts)
 # ---------------------------------------------------------------------------
+
+extract_codex_artifact() {
+  # extract_codex_artifact <archive> <expected-member> <destination>
+  archive_path=$1
+  expected_member=$2
+  destination=$3
+
+  members=$destination.members
+  tar -tzf "$archive_path" > "$members" || fail "unreadable codex archive: $(basename -- "$archive_path")"
+  test "$(wc -l < "$members" | tr -d ' ')" -eq 1 \
+    && test "$(sed -n '1p' "$members")" = "$expected_member" \
+    || fail "codex archive contains an unexpected or missing member: $(basename -- "$archive_path")"
+  tar -tzvf "$archive_path" \
+    | awk 'NR != 1 || substr($1, 1, 1) != "-" { bad=1 } END { exit bad }' \
+    || fail "codex archive contains a non-regular member: $(basename -- "$archive_path")"
+
+  extracted_dir=$destination.extracted
+  mkdir -p "$extracted_dir"
+  tar -xzf "$archive_path" --no-same-owner --no-same-permissions \
+    -C "$extracted_dir" -- "$expected_member"
+  test -f "$extracted_dir/$expected_member" \
+    && ! test -L "$extracted_dir/$expected_member" \
+    || fail "expected regular codex artifact was not extracted: $expected_member"
+  install -m 0755 "$extracted_dir/$expected_member" "$destination"
+}
+
+rollback_codex_pair() {
+  test "${codex_publish_active:-0}" = 1 || return 0
+  rm -f -- "$codex_dest" "$codex_host_dest" "$codex_metadata_dest"
+  test "${codex_had_main:-0}" = 0 \
+    || mv -- "$codex_transaction/old-codex" "$codex_dest"
+  test "${codex_had_host:-0}" = 0 \
+    || mv -- "$codex_transaction/old-codex-code-mode-host" "$codex_host_dest"
+  test "${codex_had_metadata:-0}" = 0 \
+    || mv -- "$codex_transaction/old-metadata" "$codex_metadata_dest"
+  codex_publish_active=0
+}
+
+cleanup_codex_install() {
+  status=$?
+  trap - EXIT HUP INT TERM
+  rollback_codex_pair || :
+  test -z "${codex_transaction:-}" || cleanup_temp "$codex_transaction"
+  test -z "${work:-}" || cleanup_temp "$work"
+  exit "$status"
+}
+
+publish_codex_pair() {
+  # All validation is complete before this function creates replacement files.
+  # The transaction directory lives under the destination so every publish and
+  # rollback rename stays on the same filesystem.
+  prefix=$1
+  staged_main=$2
+  staged_host=$3
+  staged_metadata=$4
+  mkdir -p "$prefix"
+  codex_transaction=$(mktemp -d "$prefix/.codex-transaction.XXXXXX")
+  install -m 0755 "$staged_main" "$codex_transaction/codex"
+  install -m 0755 "$staged_host" "$codex_transaction/codex-code-mode-host"
+  install -m 0644 "$staged_metadata" "$codex_transaction/metadata"
+
+  codex_dest=$prefix/codex
+  codex_host_dest=$prefix/codex-code-mode-host
+  codex_metadata_dest=$prefix/.codex-install-metadata
+  codex_had_main=0
+  codex_had_host=0
+  codex_had_metadata=0
+  codex_publish_active=1
+  if test -e "$codex_dest" || test -L "$codex_dest"; then
+    mv -- "$codex_dest" "$codex_transaction/old-codex"
+    codex_had_main=1
+  fi
+  if test -e "$codex_host_dest" || test -L "$codex_host_dest"; then
+    mv -- "$codex_host_dest" "$codex_transaction/old-codex-code-mode-host"
+    codex_had_host=1
+  fi
+  if test -e "$codex_metadata_dest" || test -L "$codex_metadata_dest"; then
+    mv -- "$codex_metadata_dest" "$codex_transaction/old-metadata"
+    codex_had_metadata=1
+  fi
+
+  mv -- "$codex_transaction/codex" "$codex_dest"
+  if test "${CYCLESTONE_TOOLS_TESTING:-0}" = 1 \
+      && test "${CYCLESTONE_TOOLS_TEST_FAULT:-}" = codex-after-main-publish; then
+    fail "injected codex publication failure after main executable"
+  fi
+  mv -- "$codex_transaction/codex-code-mode-host" "$codex_host_dest"
+  mv -- "$codex_transaction/metadata" "$codex_metadata_dest"
+  test -f "$codex_dest" && test -x "$codex_dest" \
+    && test -f "$codex_host_dest" && test -x "$codex_host_dest" \
+    && test -f "$codex_metadata_dest" \
+    || fail "published codex installation is incomplete"
+
+  codex_publish_active=0
+  cleanup_temp "$codex_transaction"
+  codex_transaction=
+}
 
 install_codex() {
   prefix=$1
   require_cmd curl
   require_cmd tar
+  require_cmd sha256sum
 
   case "$TARGETARCH" in
     amd64) target=x86_64-unknown-linux-musl ;;
     arm64) target=aarch64-unknown-linux-musl ;;
     *) fail "unsupported codex architecture: $TARGETARCH" ;;
   esac
-  archive=codex-$target.tar.gz
-  url="https://github.com/openai/codex/releases/latest/download/$archive"
+
+  tag=$(gh_latest_tag openai/codex)
+  test -n "$tag" || fail "could not resolve latest codex release tag"
+  case "$tag" in
+    rust-v*) version=${tag#rust-v} ;;
+    v*) version=${tag#v} ;;
+    *) fail "unsupported codex release tag: $tag" ;;
+  esac
+  printf '%s\n' "$version" \
+    | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-alpha(\.[0-9]+){0,2}|-beta(\.[0-9]+)?)?$' \
+    || fail "invalid codex release version: $version"
+
+  main_archive=codex-$target.tar.gz
+  host_archive=codex-code-mode-host-$target.tar.gz
+  base_url="https://github.com/openai/codex/releases/download/$tag"
 
   work=$(temp_dir)
-  trap "cleanup_temp '$work'" EXIT HUP INT TERM
+  codex_transaction=
+  codex_publish_active=0
+  trap cleanup_codex_install EXIT HUP INT TERM
 
-  secure_curl --output "$work/$archive" "$url"
-  test -s "$work/$archive" || fail "empty codex archive download"
+  # Resolve exactly one release above, then stage both architecture-matched
+  # artifacts from that immutable tag before touching the installed pair.
+  secure_curl --output "$work/$main_archive" "$base_url/$main_archive"
+  test -s "$work/$main_archive" || fail "empty codex archive download: $main_archive"
+  secure_curl --output "$work/$host_archive" "$base_url/$host_archive"
+  test -s "$work/$host_archive" || fail "empty codex archive download: $host_archive"
 
-  # Inspect members: reject unsafe paths; expect a single binary member.
-  members=$work/members
-  tar -tzf "$work/$archive" > "$members" || fail "unreadable codex archive"
-  # Reject absolute/parent/symlink/device members
-  if awk '/^\// { exit 1 } { split($0, c, "/"); for (i=1; i<=length(c); i++) if (c[i] == "..") exit 1 }' "$members"; then
-    :
-  else
-    fail "codex archive contains unsafe absolute or parent path"
-  fi
-  tar -tzvf "$work/$archive" \
-    | awk 'substr($1, 1, 1) != "-" { bad=1 } END { exit bad }' \
-    || fail "codex archive contains a non-regular member"
+  staged_main=$work/codex
+  staged_host=$work/codex-code-mode-host
+  extract_codex_artifact "$work/$main_archive" "codex-$target" "$staged_main"
+  extract_codex_artifact "$work/$host_archive" "codex-code-mode-host-$target" "$staged_host"
+  test -f "$staged_main" && test -x "$staged_main" \
+    && test -f "$staged_host" && test -x "$staged_host" \
+    || fail "staged codex installation is incomplete"
 
-  mkdir -p "$prefix"
-  # Extract and rename the single binary member to 'codex'.
-  extracted=$work/extracted
-  mkdir -p "$extracted"
-  tar -xzf "$work/$archive" --no-same-owner --no-same-permissions -C "$extracted"
-  member=$(cd "$extracted" && ls -1 | head -n 1)
-  test -n "$member" || fail "codex archive is empty"
-  test -f "$extracted/$member" || fail "codex archive member is not a regular file"
-  install_file "$extracted/$member" "$prefix/codex" 0755
+  installed_version=$("$staged_main" --version 2>/dev/null \
+    | head -n 1 | awk '{print $NF}' | sed 's/^v//')
+  test "$installed_version" = "$version" \
+    || fail "staged codex version mismatch: $installed_version != $version"
+
+  main_sha=$(sha256sum "$staged_main" | awk '{print $1}')
+  host_sha=$(sha256sum "$staged_host" | awk '{print $1}')
+  metadata=$work/codex-install-metadata
+  {
+    printf 'format=1\n'
+    printf 'version=%s\n' "$version"
+    printf 'target=%s\n' "$target"
+    printf 'codex_sha256=%s\n' "$main_sha"
+    printf 'codex_code_mode_host_sha256=%s\n' "$host_sha"
+  } > "$metadata"
+  test "$(wc -l < "$metadata" | tr -d ' ')" -eq 5 \
+    || fail "invalid codex installation metadata"
+
+  publish_codex_pair "$prefix" "$staged_main" "$staged_host" "$metadata"
 
   trap - EXIT HUP INT TERM
   cleanup_temp "$work"
 }
 
 update_codex() {
+  # Reinstall the complete pair even if `codex --version` is current. The host
+  # has no reliable version command, so presence alone cannot prove a match.
   install_codex "$(prefix_for_user)"
 }
 

@@ -1,4 +1,5 @@
 bash
+bubblewrap
 ca-certificates
 curl
 file

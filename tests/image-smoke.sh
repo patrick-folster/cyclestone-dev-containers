@@ -47,6 +47,12 @@ docker run --rm "$image" sh -eu -c '
   for tool in $(printf "%s" "$tools" | tr "," " "); do
     case "$tool" in
       opencode) bin="$HOME/.opencode/bin/opencode" ;;
+      codex)
+        bin="$HOME/.local/bin/codex"
+        test -f "$HOME/.local/bin/codex-code-mode-host"
+        test -x "$HOME/.local/bin/codex-code-mode-host"
+        test "$(stat -c %U:%G "$HOME/.local/bin/codex-code-mode-host")" = developer:developer
+        ;;
       *) bin="$tool" ;;
     esac
     command -v "$bin" >/dev/null 2>&1 || { echo "selected tool not on PATH: $tool" >&2; exit 1; }
