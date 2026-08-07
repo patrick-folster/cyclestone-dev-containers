@@ -95,14 +95,19 @@ project, its contributors, and the maintainer. I represent that I am
 legally able to grant these rights.
 ```
 
-Git can add the trailer automatically:
+Git can add the trailer using the `-s` flag:
 
 ```sh
 git commit -s -m "your message"
 ```
 
-The DCO GitHub Action checks every pull request; commits missing the trailer
-are rejected. If you forget, amend the commit:
+Alternatively, you can enable the repository's local git hook to sign off all future commits automatically:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+The DCO GitHub Action checks every pull request; commits missing the trailer are rejected. If you forget, amend the commit:
 
 ```sh
 git commit --amend -s --no-edit

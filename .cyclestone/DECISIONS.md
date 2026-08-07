@@ -1043,4 +1043,13 @@ ones but do not rewrite them.
 - **Consequences:** Developers can run `./scripts/build-base-local.sh` with zero arguments to build and tag the base image locally.
 - **Supersession:** None.
 
+## 2026-08-07 — D-051 Document local Git commit-msg hook for automatic DCO compliance
+
+- **Context:** Commits pushed without a `Signed-off-by` trailer fail the Developer Certificate of Origin (DCO) check in CI workflows. While manual signing via `git commit -s` is supported, contributors frequently forget to include it, resulting in failed builds and manual amend-and-force-push overhead.
+- **Outcome:** Documented the repository's pre-configured local git hook (`.githooks/commit-msg`) in `CONTRIBUTING.md` and explained how to enable it using `git config core.hooksPath .githooks`.
+- **Rationale:** Explicitly documenting the automatic sign-off hook reduces friction for local developers and prevents DCO check failures from reaching CI, while keeping the DCO workflow intact as a safety net.
+- **Consequences:** Contributors who configure `core.hooksPath` to point to `.githooks` will have their commits automatically signed, eliminating manual signing overhead. Future clones must run the configuration command once to activate the hook locally.
+- **Supersession:** None.
+
+
 
