@@ -988,3 +988,11 @@ ones but do not rewrite them.
 - **Rationale:** Using the verified, immutable commit hash for `v3.3.0` ensures the action resolves correctly while maintaining the repository's security posture of pinning GitHub Actions to exact commit SHAs.
 - **Consequences:** The `Publish Release Image` workflow can successfully download and run the log in action.
 - **Supersession:** None.
+
+## 2026-08-07 — D-047 Add attestations: write permission to release workflow
+
+- **Context:** The `Publish Release Image` workflow fails during the build attestation steps with: `Error: Error: Failed to persist attestation: Resource not accessible by integration - https://docs.github.com/rest/repos/attestations#create-an-attestation`. This is because the workflow's `GITHUB_TOKEN` does not have the permissions required to write/persist build attestations.
+- **Outcome:** Added the `attestations: write` permission to the top-level permissions block in `.github/workflows/release-image.yml`.
+- **Rationale:** The `actions/attest-build-provenance` action requires explicit `attestations: write` privileges (along with `id-token: write`) to securely publish and link attestation metadata back to the repository.
+- **Consequences:** Build attestations can be successfully created and persisted when running the release workflow.
+- **Supersession:** None.
